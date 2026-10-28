@@ -265,7 +265,7 @@ export function OrdersTable({
               {show("source") && (
                 <TableCell>
                   <span className="block">{sourceLabel(o)}</span>
-                  <span className="block text-xs text-muted-foreground">{CHANNELS[o.channel]}</span>
+                  {sourceLabel(o) !== CHANNELS[o.channel] && <span className="block text-xs text-muted-foreground">{CHANNELS[o.channel]}</span>}
                 </TableCell>
               )}
               {show("date") && <TableCell className="num text-muted-foreground">{shortDate(o.created_at)}</TableCell>}

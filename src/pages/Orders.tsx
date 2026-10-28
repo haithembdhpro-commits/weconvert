@@ -252,6 +252,7 @@ export function Orders({ tab }: { tab: string }) {
               key={x.id}
               type="button"
               title={x.hint}
+              aria-label={`${x.label} : ${list.data ? n : "chargement"} — ${x.hint}`}
               aria-pressed={on}
               onClick={() => {
                 setStatus("all")
