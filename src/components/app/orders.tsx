@@ -35,7 +35,7 @@ export function waLink(phone: string) {
  * Call, WhatsApp and copy for a customer phone. `full` shows labelled buttons (call sheet, order card);
  * otherwise compact icon buttons (lists). Clicks never open the row behind.
  */
-export function ContactActions({ phone, full = false, className }: { phone: string; full?: boolean; className?: string }) {
+export function ContactActions({ phone, full = false, dense = false, className }: { phone: string; full?: boolean; dense?: boolean; className?: string }) {
   if (!phone) return null
   const stop = (e: React.MouseEvent) => e.stopPropagation()
   const copy = async (e: React.MouseEvent) => {
@@ -68,19 +68,22 @@ export function ContactActions({ phone, full = false, className }: { phone: stri
         </Button>
       </div>
     )
+  // dense: 24 px targets inside table rows (WCAG 2.2 AA minimum), 44 px on touch screens.
+  const size = dense ? "icon-xs" : "icon-sm"
+  const touch = dense ? "coarse:size-11" : ""
   return (
     <span className={cn("inline-flex gap-0.5", className)}>
-      <Button variant="ghost" size="icon-sm" asChild>
+      <Button variant="ghost" size={size} className={touch} asChild>
         <a href={"tel:" + phone} onClick={stop} aria-label={"Appeler le " + phone} title="Appeler">
           <Phone />
         </a>
       </Button>
-      <Button variant="ghost" size="icon-sm" asChild>
+      <Button variant="ghost" size={size} className={touch} asChild>
         <a href={waLink(phone)} target="_blank" rel="noopener noreferrer" onClick={stop} aria-label={"Écrire sur WhatsApp au " + phone} title="WhatsApp">
           <MessageCircle />
         </a>
       </Button>
-      <Button variant="ghost" size="icon-sm" onClick={copy} aria-label={"Copier le " + phone} title="Copier le numéro">
+      <Button variant="ghost" size={size} className={touch} onClick={copy} aria-label={"Copier le " + phone} title="Copier le numéro">
         <Copy />
       </Button>
     </span>
@@ -328,9 +331,11 @@ export function OrdersTable({
                   </span>
                   <span className="min-w-0">
                     <span className="block font-medium">{o.customer_name}</span>
-                    <span className="num block text-xs text-muted-foreground">{o.phone}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="num text-xs text-muted-foreground">{o.phone}</span>
+                      {!compact && <ContactActions phone={o.phone} dense />}
+                    </span>
                   </span>
-                  {!compact && <ContactActions phone={o.phone} className="ml-auto" />}
                 </div>
               </TableCell>
               {show("product") && (
