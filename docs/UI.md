@@ -15,7 +15,7 @@ Le backend ne change pas : schéma, RLS, RPC, fonctions Edge, Vault et cron sont
 - `src/components/app/` : coque, tableau et dialogues de commande, primitives de page. `src/components/ui/` : shadcn.
 
 ## Direction visuelle (décision du propriétaire, 28/10/2026)
-Palette **Picton Blue** (Kigen.design) en tokens shadcn dans `src/index.css`, thème clair et sombre. Police Outfit auto-hébergée. Icônes Lucide.
+Palette **Picton Blue** (Kigen.design) en tokens shadcn dans `src/index.css`, thème clair et sombre. L'accent bleu est définitif (28/10/2026) : l'aperçu orange a été retiré. Police Outfit auto-hébergée. Icônes Lucide.
 
 Contrastes calculés (WCAG) :
 - clair : bouton principal blanc sur `#0071a4` 5,39:1 · texte `#001320` sur blanc 18,85:1 · texte secondaire `#005278` sur `#f5faff` 8,07:1 · bordure de champ `#009de1` 3,04:1.
@@ -40,8 +40,18 @@ VITE_SUPABASE_URL=https://<ref>.supabase.co VITE_SUPABASE_KEY=sb_publishable_...
 Sans variables, le build vise le projet de `src/domain/config.json` (production). Pour staging, toujours passer les deux variables.
 
 ## Commandes façon Confirmoo (28/10/2026)
-- La page **Commandes** s'ouvre sur 7 cartes d'étape avec compteurs : Toutes · Nouvelles (à confirmer) · En préparation (confirmées, pas encore chez le transporteur) · Expédiées · Livrées · Retournées · Annulées (annulées, doublons, faux numéros). Expédiée/Livrée/Retournée viennent du colis ZR : c'est un statut transporteur, pas un encaissement.
+- La page **Commandes** s'ouvre sur 7 cartes d'étape avec compteurs : Toutes · À confirmer · En préparation (confirmées, pas encore chez le transporteur) · Expédiées · Livrées · Retournées · Clôturées (annulées, doublons, faux numéros). Expédiée/Livrée/Retournée viennent du colis ZR : c'est un statut transporteur, pas un encaissement.
 - Le **badge de statut** est cliquable : Appel 1 / 2 / 3+ (on peut sauter à l'appel 3, jamais revenir en arrière), Confirmée, Reportée (rappel daté), À vérifier, Faux numéro, Doublon, Annulée. Les responsables peuvent rouvrir ou annuler une commande confirmée tant qu'aucun colis actif n'existe. Le serveur reste juge (RPC `crm_command`).
 - Colonnes **Livraison** (état ZR + n° de suivi) et **Source** (WooCommerce, Shopify, YouCan ou canal saisi) ; bouton **Colonnes** pour masquer Produit, Adresse, Agent, Livraison, Source, Date (choix mémorisé dans le navigateur).
 - La recherche trouve aussi un n° de suivi. Les anciens liens `#orders/pending`, `#orders/cancelled_all` et `#orders/confirmed` restent valides.
 - Données : RPC `crm_order_board` (RLS appliquée : un agent ne voit que ses commandes et ses compteurs). L'écran **Confirmation** (file + fiche d'appel) est conservé en complément.
+
+## Poste d'agent (audit UX du 28/10/2026, lot 1)
+- **Confirmation** : la fiche d'appel affichée ne change jamais seule (un rafraîchissement temps réel ajoute des commandes à la file, il ne remplace pas le client). File servie dans l'ordre d'arrivée ; onglet rappels trié par heure de rappel. Après une action acceptée (Confirmer, Sans réponse, Rappel, statut à motif), la fiche passe à la commande suivante ; bouton « Suivante ».
+- Ordre de la fiche : identité → Appeler / WhatsApp / Copier → actions (Confirmer · Sans réponse · Rappel… · Autres) → montant et adresse → articles → script (replié) → note → sources → historique. Les brouillons de note sont gardés par commande pendant la session de l'onglet.
+- **Confirmer est annulable 5 s** depuis la notification ; la commande s'affiche « Confirmée · envoi… » pendant ce délai. L'envoi part immédiatement si l'onglet est masqué ou si la boutique change ; fermer l'onglet pendant le délai demande confirmation au navigateur.
+- Libellés : « Annuler la commande… » (action métier, toujours avec motif) ; « Annuler » / « Retour » ferment un dialogue. Motifs fréquents proposés pour Annulée, Faux numéro, Doublon, Rouvrir ; raccourcis de rappel (Dans 1 h, Ce soir 18:00, Demain 10:00).
+- Listes : chargement et erreur (avec « Réessayer ») au lieu d'un faux « Aucune commande » ; chiffres « … » tant que le serveur n'a pas répondu, « — » en cas d'erreur.
+- Sélection multiple : barre flottante en bas d'écran (le tableau ne bouge pas) ; la sélection ne garde que les lignes encore visibles après un rafraîchissement.
+- Formulaire de commande : wilaya choisie dans la liste officielle des 69 wilayas (`src/lib/wilayas.ts`, format « 16 - Alger », codes 59–69 du décret 26-206) ; fermer avec une saisie en cours demande « Abandonner la saisie ? ».
+- Menu : les modules non branchés sont regroupés sous « Bientôt » (replié par défaut, choix mémorisé).
