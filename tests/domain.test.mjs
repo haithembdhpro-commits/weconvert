@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {orderAmount,csvCell,localInputToISO,errorMessage,initialsOf,requestId} from '../src/domain.mjs';
+import {orderAmount,csvCell,localInputToISO,errorMessage,initialsOf,requestId} from '../src/domain/domain.mjs';
 test('request identifiers remain valid and unique without randomUUID',()=>{
  const ids=Array.from({length:100},()=>requestId());
  assert.equal(new Set(ids).size,100);

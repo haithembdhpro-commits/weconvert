@@ -47,7 +47,15 @@ test('OAuth callbacks park tokens until the initiator confirms',async()=>{
  }
 });
 
-test('Built page ships a Content-Security-Policy',async()=>{
- const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
- assert.match(html,/Content-Security-Policy" content="default-src 'self'; script-src 'self';/);
+test('Build hardens the page: strict CSP, no inline script, framing denied, secret keys refused',async()=>{
+ const post=await readFile(new URL('../scripts/postbuild.mjs',import.meta.url),'utf8');
+ assert.match(post,/"default-src 'self'"/);
+ assert.match(post,/"script-src 'self'"/);
+ assert.match(post,/frame-ancestors 'none'/);
+ assert.match(post,/X-Frame-Options: DENY/);
+ assert.match(post,/Inline <script> found/);
+ const vite=await readFile(new URL('../vite.config.ts',import.meta.url),'utf8');
+ assert.match(vite,/service_role\|sb_secret_/);
+ const cfg=JSON.parse(await readFile(new URL('../src/domain/config.json',import.meta.url),'utf8'));
+ assert.ok(cfg.key.startsWith('sb_publishable_'));
 });

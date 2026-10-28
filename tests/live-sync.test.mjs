@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createLiveSync} from '../src/live-sync.mjs';
+import {createLiveSync} from '../src/domain/live-sync.mjs';
 const tick=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
 function setup(onChange=async()=>{}){
  let id=0;const tasks=new Map(),channels=[],states=[];

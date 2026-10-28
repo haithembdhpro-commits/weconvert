@@ -6,7 +6,7 @@ set -euo pipefail
 ENV="${1:-}"
 case "$ENV" in
  staging)    REF=rnnjgkojhoyooovyqvnl; PAGES=weconvert-crm-staging; KEY=sb_publishable_ly3iyv5oJ5VLVFwfuOpN6w_XoFEobVD ;;
- production) REF=loxdcfxxefigfchmrwzy; PAGES=weconvert-crm;         KEY="" ;;  # clé publiable déjà dans src/config.json
+ production) REF=loxdcfxxefigfchmrwzy; PAGES=weconvert-crm;         KEY="" ;;  # clé publiable déjà dans src/domain/config.json
  *) echo "Usage : bash scripts/deploy.sh staging|production"; exit 1 ;;
 esac
 FRONT="${WECONVERT_FRONTEND_URL:-https://$PAGES.pages.dev}"
@@ -21,7 +21,7 @@ npx supabase db push
 [ "$ENV" = staging ] && echo "!! Staging : demande à Claude de corriger le secret Vault weconvert_zr_project_url (ou SQL editor : select vault.update_secret((select id from vault.secrets where name='weconvert_zr_project_url'),'https://$REF.supabase.co');)"
 npx supabase secrets set --project-ref "$REF" WECONVERT_FRONTEND_URL="$FRONT"
 echo "== Frontend (Cloudflare : $PAGES)"
-if [ -n "$KEY" ]; then WECONVERT_SUPABASE_URL="https://$REF.supabase.co" WECONVERT_SUPABASE_KEY="$KEY" npm run build; else npm run build; fi
+if [ -n "$KEY" ]; then VITE_SUPABASE_URL="https://$REF.supabase.co" VITE_SUPABASE_KEY="$KEY" npm run build; else npm run build; fi
 npx wrangler pages project create "$PAGES" --production-branch main 2>/dev/null || true
 npx wrangler pages deploy dist --project-name "$PAGES" --branch main
 echo "== Edge Functions (après le frontend : le retour OAuth vise $FRONT/#oauth/...)"

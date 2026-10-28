@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {algerToday,reportRange,reportRate,reportBuckets} from '../src/report-domain.mjs';
+import {algerToday,reportRange,reportRate,reportBuckets} from '../src/domain/report-domain.mjs';
 
 test('report dates follow Algeria rather than browser UTC and include both ends',()=>{
  assert.equal(algerToday(new Date('2026-10-25T23:15:00Z')),'2026-10-26');
