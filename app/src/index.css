@@ -1,0 +1,160 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* WeConvert — tokens shadcn, palette Picton Blue (Kigen.design). Contrastes calculés : voir docs/UI-REACT.md */
+:root {
+  --picton-1: #e7f2ff; --picton-2: #c4e1ff; --picton-3: #85c8ff; --picton-4: #00b2ff;
+  --picton-6: #009de1; --picton-9: #0071a4; --picton-10: #00618e; --picton-12: #005278;
+  --picton-14: #004262; --picton-15: #003a56; --picton-16: #00324b; --picton-17: #002a41;
+  --picton-18: #002236; --picton-19: #001b2b; --picton-20: #001320;
+
+  --radius: 0.625rem;
+  --background: #f5faff;
+  --foreground: var(--picton-20);
+  --card: #ffffff;
+  --card-foreground: var(--picton-20);
+  --popover: #ffffff;
+  --popover-foreground: var(--picton-20);
+  --primary: var(--picton-9);
+  --primary-foreground: #ffffff;
+  --secondary: var(--picton-1);
+  --secondary-foreground: var(--picton-14);
+  --muted: var(--picton-1);
+  --muted-foreground: var(--picton-12);
+  --accent: var(--picton-1);
+  --accent-foreground: var(--picton-16);
+  --destructive: #dc2626;
+  --border: var(--picton-2);
+  --input: var(--picton-6);
+  --ring: var(--picton-9);
+  --brand: var(--picton-4);
+
+  --success: #15803d; --success-soft: #dcfce7;
+  --warning: #b45309; --warning-soft: #fef3c7;
+  --danger: #b91c1c; --danger-soft: #fee2e2;
+  --info: var(--picton-10); --info-soft: var(--picton-1);
+  --violet: #6d28d9; --violet-soft: #ede9fe;
+  --neutral: #475569; --neutral-soft: #f1f5f9;
+
+  --chart-1: var(--picton-6); --chart-2: var(--picton-2); --chart-3: #6d28d9; --chart-4: #15803d; --chart-5: #b45309;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--picton-18);
+  --sidebar-primary: var(--picton-9);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--picton-1);
+  --sidebar-accent-foreground: var(--picton-10);
+  --sidebar-border: var(--picton-2);
+  --sidebar-ring: var(--picton-9);
+}
+
+.dark {
+  --background: var(--picton-20);
+  --foreground: #eef7ff;
+  --card: var(--picton-19);
+  --card-foreground: #eef7ff;
+  --popover: var(--picton-19);
+  --popover-foreground: #eef7ff;
+  --primary: var(--picton-4);
+  --primary-foreground: var(--picton-20);
+  --secondary: var(--picton-17);
+  --secondary-foreground: var(--picton-2);
+  --muted: var(--picton-18);
+  --muted-foreground: var(--picton-3);
+  --accent: var(--picton-17);
+  --accent-foreground: var(--picton-1);
+  --destructive: #f87171;
+  --border: var(--picton-16);
+  --input: var(--picton-9);
+  --ring: var(--picton-4);
+
+  --success: #4ade80; --success-soft: rgb(74 222 128 / 0.14);
+  --warning: #fbbf24; --warning-soft: rgb(251 191 36 / 0.14);
+  --danger: #f87171; --danger-soft: rgb(248 113 113 / 0.14);
+  --info: var(--picton-3); --info-soft: rgb(0 178 255 / 0.14);
+  --violet: #c4b5fd; --violet-soft: rgb(196 181 253 / 0.14);
+  --neutral: #cbd5e1; --neutral-soft: rgb(203 213 225 / 0.12);
+
+  --chart-1: var(--picton-4); --chart-2: var(--picton-15);
+
+  --sidebar: var(--picton-19);
+  --sidebar-foreground: var(--picton-2);
+  --sidebar-primary: var(--picton-4);
+  --sidebar-primary-foreground: var(--picton-20);
+  --sidebar-accent: var(--picton-17);
+  --sidebar-accent-foreground: var(--picton-3);
+  --sidebar-border: var(--picton-16);
+  --sidebar-ring: var(--picton-4);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Outfit Variable", "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { accent-color: var(--primary); caret-color: var(--primary); scrollbar-color: var(--picton-3) transparent; }
+  .dark { scrollbar-color: var(--picton-14) transparent; }
+  body { @apply bg-background text-foreground antialiased; font-feature-settings: "tnum" 0; }
+  ::selection { background: var(--picton-2); color: var(--picton-20); }
+  .dark ::selection { background: var(--picton-14); color: #eef7ff; }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  a { text-underline-offset: 3px; }
+}
+
+@utility num { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

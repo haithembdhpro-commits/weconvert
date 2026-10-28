@@ -1,0 +1,277 @@
+import { useEffect, useState } from "react"
+import { toast } from "sonner"
+import { ArrowDownUp, Download, ExternalLink, Plus, RotateCcw, Search, Users, X } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { CHANNELS, STATUS, csvCell } from "@domain/domain.mjs"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PageHeader, Pager } from "@/components/app/page"
+import { OrdersTable, useOrderUI } from "@/components/app/orders"
+import { rpc, safeError, select } from "@/lib/api"
+import { f, orderCode, time } from "@/lib/format"
+import { useOrders, useOverview } from "@/lib/queries"
+import { navigate } from "@/lib/router"
+import { useSession } from "@/lib/session"
+import { supabase } from "@/lib/supabase"
+import type { Order } from "@/lib/types"
+
+export function useDebounced<T>(value: T, ms = 350) {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return v
+}
+
+const UUID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i
+const REASONS: Record<string, string> = { CUSTOMER_REQUIRED: "Nom du client absent", INVALID_PHONE: "Téléphone absent ou invalide", WILAYA_REQUIRED: "Wilaya absente" }
+const YOUCAN_SKIP: Record<string, string> = {
+  CUSTOMER_REQUIRED: "Nom du client toujours absent sur YouCan.",
+  INVALID_PHONE: "Téléphone toujours absent ou invalide sur YouCan.",
+  WILAYA_REQUIRED: "Wilaya toujours absente sur YouCan.",
+}
+
+function YoucanAlerts() {
+  const s = useSession()
+  const qc = useQueryClient()
+  const alerts = useQuery({
+    queryKey: ["store", s.store, "youcan-alerts"],
+    enabled: !!s.store && s.manager,
+    queryFn: async () => {
+      const conn = await select<{ id: string } | null>(supabase.from("crm_source_connections").select("id").eq("store_id", s.store!).eq("provider", "youcan").maybeSingle())
+      if (!conn.data) return { connection: null, items: [] as any[] }
+      const ev = await select<any[]>(
+        supabase.from("crm_source_events").select("id,external_id,outcome,code,created_at").eq("connection_id", conn.data.id).not("external_id", "is", null).order("id", { ascending: false }).limit(100),
+      )
+      const latest = new Map<string, any>()
+      for (const e of ev.data) if (!latest.has(e.external_id)) latest.set(e.external_id, e)
+      return {
+        connection: conn.data.id,
+        items: [...latest.values()].filter((e) => e.outcome === "skipped" && REASONS[e.code]).slice(0, 10),
+      }
+    },
+  })
+  const [busy, setBusy] = useState("")
+  if (!alerts.data?.items.length) return null
+  return (
+    <Card role="status" className="mb-5 gap-3 p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Commandes YouCan à compléter</h2>
+          <p className="text-sm text-muted-foreground">Ces commandes sont reçues, mais ne sont pas encore dans la file de confirmation ni dans les statistiques COD.</p>
+        </div>
+      </div>
+      <ul className="grid gap-2">
+        {alerts.data.items.map((e) => (
+          <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
+            <span>
+              <b className="num">{time(e.created_at)}</b> · {REASONS[e.code]}
+            </span>
+            {UUID.test(e.external_id || "") && (
+              <span className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`https://seller-area.youcan.shop/admin/orders/${encodeURIComponent(e.external_id)}/edit`} target="_blank" rel="noopener noreferrer">
+                    Compléter sur YouCan
+                    <ExternalLink />
+                  </a>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!!busy}
+                  onClick={async () => {
+                    setBusy(e.external_id)
+                    try {
+                      const { data, error } = await supabase.functions.invoke("weconvert-youcan", {
+                        body: { action: "retry_order", connection_id: alerts.data!.connection, external_id: e.external_id },
+                      })
+                      if (error) throw error
+                      if (data?.error) throw Object.assign(Error(data.error), { youcanCode: data.error })
+                      toast(data?.outcome === "skipped" ? YOUCAN_SKIP[data.code] || data.code : "Commande YouCan réexaminée.")
+                      await qc.invalidateQueries({ queryKey: ["store", s.store] })
+                    } catch (err) {
+                      toast.error(safeError(err))
+                    } finally {
+                      setBusy("")
+                    }
+                  }}
+                >
+                  <RotateCcw />
+                  Réessayer
+                </Button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+const TAB_IDS = ["all", "new", "pending", "confirmed", "cancelled_all"]
+
+export function Orders({ tab }: { tab: string }) {
+  const s = useSession()
+  const ui = useOrderUI()
+  const status = TAB_IDS.includes(tab) ? tab : "all"
+  const [q, setQ] = useState("")
+  const query = useDebounced(q)
+  const [page, setPage] = useState(1)
+  const [agent, setAgent] = useState("")
+  const [ascending, setAscending] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
+  const o = useOverview().data || {}
+  const list = useOrders({ status, q: query, page, agent, ascending })
+  const orders = list.data?.items || []
+  const total = list.data?.total || 0
+
+  // Filters reset pagination and selection; live refreshes do not touch either.
+  useEffect(() => {
+    setPage(1)
+    setSelected(new Set())
+  }, [status, query, agent, ascending, s.store])
+  useEffect(() => {
+    if (page > 1 && list.data && !orders.length && total > 0) setPage(Math.ceil(total / 20))
+  }, [page, list.data, orders.length, total])
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const seen = new Map<string, Order>()
+      const started = Date.now()
+      let p = 1
+      let count = Infinity
+      while (seen.size < count && p <= 1000) {
+        const data = await rpc<{ items: Order[]; total: number }>("crm_list_orders", {
+          p_store: s.store, p_status: status, p_query: query, p_page: p++, p_size: 100, p_agent: agent || null, p_ascending: ascending,
+        })
+        count = data.total
+        for (const x of data.items) if (!seen.has(x.id) && Date.parse(x.created_at) <= started) seen.set(x.id, x)
+        if (!data.items.length) break
+      }
+      const rows = [...seen.values()]
+      const head = ["Commande", "Client", "Téléphone", "Wilaya", "Commune", "Adresse", "Canal", "Statut", "Agent", "Montant COD", "Créée le"]
+      const csv =
+        "﻿" +
+        [head, ...rows.map((x) => [orderCode(x), x.customer_name, x.phone, x.wilaya, x.commune, x.address, CHANNELS[x.channel], STATUS[x.status][0], s.memberName(x.assigned_to), x.total, new Date(x.created_at).toLocaleString("fr-FR", { timeZone: "Africa/Algiers" })])]
+          .map((r) => r.map(csvCell).join(";"))
+          .join("\r\n")
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "WeConvert-commandes.csv"
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast.success(rows.length + " commandes exportées.")
+    } catch (e) {
+      toast.error(safeError(e))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const tabs: [string, string, number | undefined][] = [
+    ["all", "Toutes", o.all],
+    ["new", "Nouvelles", o.new],
+    ["pending", "En traitement", o.pending],
+    ["confirmed", "Statuts confirmés", o.confirmed],
+    ["cancelled_all", "Annulées", o.cancelled],
+  ]
+
+  return (
+    <>
+      <PageHeader
+        title="Vos commandes, sous contrôle."
+        description="Centralisez, vérifiez et confirmez chaque commande."
+        actions={
+          <>
+            <Button variant="outline" onClick={exportCsv} disabled={exporting} aria-busy={exporting}>
+              <Download />
+              {exporting ? "Export en cours…" : "Exporter la sélection filtrée"}
+            </Button>
+            <Button size="lg" onClick={ui.newOrder}>
+              <Plus />
+              Nouvelle commande
+            </Button>
+          </>
+        }
+      />
+      <YoucanAlerts />
+      <Tabs value={status} onValueChange={(v) => navigate("orders", v === "all" ? "" : v)} className="mb-4">
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+          <TabsList>
+            {tabs.map(([id, label, n]) => (
+              <TabsTrigger key={id} value={id} className="px-3">
+                {label}
+                {n !== undefined && <span className="num ml-1 rounded-full bg-background/70 px-1.5 text-xs">{f(n)}</span>}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+      </Tabs>
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="flex flex-wrap items-center gap-2 border-b p-4">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" aria-hidden />
+            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Client, téléphone, wilaya ou numéro…" aria-label="Rechercher" maxLength={200} className="pl-9" />
+          </div>
+          {s.manager && (
+            <NativeSelect value={agent} onChange={(e) => setAgent(e.target.value)} aria-label="Filtrer par agent" wrapperClassName="w-full sm:w-56">
+              <NativeSelectOption value="">Tous les agents</NativeSelectOption>
+              {s.members.filter((m) => m.active).map((m) => (
+                <NativeSelectOption key={m.user_id} value={m.user_id}>
+                  {m.display_name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          )}
+          <Button variant="outline" onClick={() => setAscending((a) => !a)} aria-pressed={ascending}>
+            <ArrowDownUp />
+            {ascending ? "Anciennes d’abord" : "Récentes d’abord"}
+          </Button>
+        </div>
+        {selected.size > 0 && s.manager && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-accent px-4 py-2 text-sm">
+            <span className="num font-medium">{selected.size} sélectionnée(s)</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                ui.assign(
+                  orders.filter((x) => selected.has(x.id)).map((x) => ({ id: x.id, version: x.version })),
+                  null,
+                )
+              }
+            >
+              <Users />
+              Affecter à un agent
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              <X />
+              Désélectionner
+            </Button>
+          </div>
+        )}
+        {list.isError && <p className="p-4 text-sm text-danger">{safeError(list.error)}</p>}
+        <OrdersTable
+          orders={orders}
+          selected={selected}
+          onToggle={(id, on) =>
+            setSelected((prev) => {
+              const n = new Set(prev)
+              on ? n.add(id) : n.delete(id)
+              return n
+            })
+          }
+          onToggleAll={(on) => setSelected(on ? new Set(orders.map((x) => x.id)) : new Set())}
+        />
+        <Pager total={total} page={page} onPage={(p) => { setPage(Math.max(1, p)); setSelected(new Set()) }} />
+      </Card>
+    </>
+  )
+}
