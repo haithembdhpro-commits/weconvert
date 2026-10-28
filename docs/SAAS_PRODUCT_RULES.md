@@ -1,0 +1,16 @@
+# Contrat produit SaaS — WeConvert CRM
+
+WeConvert sert des entreprises COD distinctes, de la petite boutique à l’équipe avec plusieurs boutiques et agents. Une décision validée sur la boutique pilote doit être généralisée à **chaque** entreprise et boutique avant livraison. Le produit doit rester utilisable lorsque des composants sont installés dans un ordre différent ou qu’une intégration n’est pas encore prête.
+
+| Situation client | Commandes opérationnelles | Suivi / attribution | Explication et reprise |
+| --- | --- | --- | --- |
+| Nouvelle entreprise, aucune boutique connectée | Saisie manuelle et équipe dans son propre espace | Pas de preuve site ; ne pas inférer des achats Meta | Onboarding sans données de démonstration mélangées aux chiffres réels. |
+| WooCommerce connecté, Suite non installée ou CAPI pas encore envoyé | Webhooks signés : réception des nouvelles commandes COD pour confirmer | État de suivi « non vérifié » ; aucun import historique des commandes dans le parcours standard | Les nouvelles commandes arrivent par webhook ; l'historique exige un flux séparé avec provenance et décision COD fiables. |
+| Suite active avant la commande | Même réception opérationnelle, sans attendre Meta | Lier l’ID `Purchase` et le marqueur positif d’envoi CAPI à la commande de **cette boutique** | Un webhook ultérieur ou une reprise ponctuelle d'une référence connue complète la preuve sans écraser la fiche CRM. Le marqueur ne prouve pas la déduplication finale par Meta. |
+| Vente par WhatsApp, Messenger, Instagram ou téléphone | Commande et confirmation rattachées à l’entreprise et au canal réel | Aucun marqueur Woo requis ; attribution messagerie à construire avec ses propres preuves | Les rapports opérationnels incluent ce canal sans le présenter comme conversion website. |
+| Plusieurs boutiques, agents, transporteurs | Chaque connexion, secret, job, checkpoint, référence externe et statut est lié à sa boutique | La même référence Woo ou ZR dans une autre boutique n’est pas un doublon global | Vue et filtres respectent les rôles ; une erreur d’une boutique ne bloque pas les autres. |
+| Historique déjà synchronisé avant une nouvelle règle | Préserver fiches, affectations, notes, stocks et liens transporteur | Ancien statut Woo dérivé signalé comme non vérifié, sans supprimer la fiche ; ne pas inventer de confirmation ni de tracking | Exclure les décisions de confirmation/annulation dérivées de Woo des taux et montants vérifiés ; conserver les liens transporteur. Aucune purge silencieuse. |
+
+Avant de coder, préciser le périmètre tenant/boutique, la source de vérité de chaque donnée, les états « en attente / absent / erreur / vérifié », les droits par rôle, et le chemin de reprise. Pour une opération longue : lots, reprise idempotente, limites raisonnables, et progression par boutique. Les chiffres d’une entreprise ne doivent jamais servir de paramètre ou de cas supposé universel.
+
+Avant livraison, vérifier avec des données synthétiques au moins deux entreprises et deux boutiques, un agent, une source avec suivi et une sans suivi, un webhook rejoué ou retardé, et les filtres de rapports concernés. Maintenir l’UI de référence du CRM et annoncer seulement ce qui est réellement implémenté.

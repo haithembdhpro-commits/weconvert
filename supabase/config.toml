@@ -1,0 +1,15 @@
+[functions.weconvert-woocommerce]
+verify_jwt = false
+entrypoint = "./functions/weconvert-woocommerce/index.ts"
+
+[functions.weconvert-zr]
+verify_jwt = false
+entrypoint = "./functions/weconvert-zr/index.ts"
+
+[functions.weconvert-shopify]
+verify_jwt = false
+entrypoint = "./functions/weconvert-shopify/index.ts"
+
+[functions.weconvert-youcan]
+verify_jwt = false
+entrypoint = "./functions/weconvert-youcan/index.ts"
