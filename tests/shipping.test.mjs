@@ -37,3 +37,9 @@ test('ZR parcel facts use remote external reference and status, never a Woo comp
  assert.equal(p.state,'delivered');assert.equal(p.amount,2400);
  assert.equal(parcelFacts({externalId:'346',state:{name:'OrderReceived'}}).state,'submitted');
 });
+test('ZR scan only queries safe, bounded parcel references',async()=>{
+ const {safeRefs}=await import('../supabase/functions/weconvert-zr/domain.mjs');
+ assert.deepEqual(safeRefs(['1001',' 1001 ','A-7','x),id.neq.(0','"q"','',null,'ok_1']),['1001','A-7','ok_1']);
+ assert.equal(safeRefs(Array.from({length:300},(_,i)=>String(i))).length,100);
+ assert.deepEqual(safeRefs('1001'),[]);
+});

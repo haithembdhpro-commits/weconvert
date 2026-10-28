@@ -1,24 +1,34 @@
 import { createClient } from '@supabase/supabase-js';
 import {WooError,normalizeStoreUrl,publicIP,validateKeys,codMethods,verifySignature,digest,boundedText,normalizeOrder,normalizeProduct,readWebhookOrder} from './domain.mjs';
+import {pinnedGet} from './pinned.mjs';
 const url=Deno.env.get('SUPABASE_URL')!;
 const service=createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const origins=new Set([(Deno.env.get('WECONVERT_FRONTEND_URL')||'https://weconvert-cod-studio-ht26.citrus-mug-9991.chatgpt.site').replace(/\/+$/,''),...(Deno.env.get('WECONVERT_DEV_ORIGINS')||'').split(',').map(x=>x.trim()).filter(x=>/^https?:\/\/[^\s,]+$/.test(x))]);
 const knownErrors=new Set(['INVALID_URL','UNSAFE_HOST','DNS_FAILED','INVALID_KEYS','INVALID_METHODS','WOO_AUTH','WOO_UNREACHABLE','WOO_REDIRECT','WOO_NOT_FOUND','WOO_RATE_LIMIT','WOO_RESPONSE','PAYLOAD_TOO_LARGE','INVALID_ORDER','INVALID_PHONE','INVALID_AMOUNT','INVALID_ITEMS','INVALID_REMOTE_DATE','INVALID_PRODUCT','CUSTOMER_REQUIRED','FORBIDDEN','AUTH_REQUIRED','NOT_FOUND','DISCONNECTED','CONNECTION_CHANGED','STORE_URL_LOCKED','SYNC_BUSY','INVALID_DATE','IMPORT_NOT_STARTED','INVALID_REQUEST','INVALID_SIGNATURE','UNSUPPORTED_TOPIC','HISTORY_IMPORT_DISABLED']);
 function errorCode(e:unknown){const m=e instanceof Error?e.message:String((e as any)?.message||'');return knownErrors.has(m)?m:'SYNC_FAILED';}
 async function rpc(action:string,p:Record<string,unknown>){const {data,error}=await service.rpc('crm_woo_service',{p_action:action,p});if(error)throw new WooError(errorCode(error),['FORBIDDEN','DISCONNECTED'].includes(error.message)?403:409);return data;}
+// Resolve once, refuse any private/reserved address, and return the checked IPs (IPv4 first).
 async function safeHost(base:string){
  const host=new URL(normalizeStoreUrl(base)).hostname;
- const results=await Promise.allSettled([Deno.resolveDns(host,'A'),Deno.resolveDns(host,'AAAA')]);
- const ips=results.flatMap(r=>r.status==='fulfilled'?r.value:[]);if(!ips.length)throw new WooError('DNS_FAILED',502);
+ const [a,aaaa]=await Promise.allSettled([Deno.resolveDns(host,'A'),Deno.resolveDns(host,'AAAA')]);
+ const v4=a.status==='fulfilled'?a.value:[],v6=aaaa.status==='fulfilled'?aaaa.value:[];
+ const ips=[...v4,...v6];if(!ips.length)throw new WooError('DNS_FAILED',502);
  if(ips.some(ip=>!publicIP(ip)))throw new WooError('UNSAFE_HOST');
+ return ips;
 }
+// The connection goes to the verified IP (no second DNS lookup): DNS rebinding cannot redirect it inside.
 async function woo(c:any,path:string,params:Record<string,string>={}){
- await safeHost(c.base_url);
+ const ips=await safeHost(c.base_url);
  const endpoint=new URL(c.base_url+'/wp-json/wc/v3/'+path);for(const [k,v] of Object.entries(params))endpoint.searchParams.set(k,v);
- let res:Response;try{res=await fetch(endpoint,{headers:{Authorization:'Basic '+btoa(c.credentials.key+':'+c.credentials.secret),Accept:'application/json'},redirect:'manual',signal:AbortSignal.timeout(12000)});}catch{throw new WooError('WOO_UNREACHABLE',502);}
+ let res:any=null,last:unknown=null;
+ for(const ip of ips.slice(0,3)){
+  try{res=await pinnedGet({url:endpoint.toString(),ip,headers:{Authorization:'Basic '+btoa(c.credentials.key+':'+c.credentials.secret),Accept:'application/json'},timeoutMs:12000,max:4_000_000});break;}
+  catch(e){last=e;if(e instanceof WooError&&e.message!=='WOO_UNREACHABLE')throw e;}
+ }
+ if(!res)throw last instanceof WooError?last:new WooError('WOO_UNREACHABLE',502);
  if(res.status>=300&&res.status<400)throw new WooError('WOO_REDIRECT');
- if(res.status===401||res.status===403)throw new WooError('WOO_AUTH');if(res.status===404)throw new WooError('WOO_NOT_FOUND');if(res.status===429)throw new WooError('WOO_RATE_LIMIT',429);if(!res.ok)throw new WooError('WOO_UNREACHABLE',502);
- let data;try{data=JSON.parse(await boundedText(res,4_000_000));}catch(e){if(e instanceof WooError)throw e;throw new WooError('WOO_RESPONSE',502);}
+ if(res.status===401||res.status===403)throw new WooError('WOO_AUTH');if(res.status===404)throw new WooError('WOO_NOT_FOUND');if(res.status===429)throw new WooError('WOO_RATE_LIMIT',429);if(res.status<200||res.status>=300)throw new WooError('WOO_UNREACHABLE',502);
+ let data;try{data=JSON.parse(res.text);}catch{throw new WooError('WOO_RESPONSE',502);}
  return {data,total:Number(res.headers.get('x-wp-total')||0),pages:Number(res.headers.get('x-wp-totalpages')||0)};
 }
 async function probe(c:any){const r=await woo(c,'orders',{per_page:'1'});if(!Array.isArray(r.data))throw new WooError('WOO_RESPONSE');return true;}

@@ -72,3 +72,16 @@ end $$;
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"30000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
 do $$begin assert (select count(*)=0 from public.crm_source_connections),'agent cannot read connections';assert (select count(*)=0 from public.crm_source_events),'agent cannot read source journal';end $$;
+-- Numeric shop id stored at OAuth (webhook anti cross-shop replay) and tokens handed back once at disconnect for revocation.
+set local role service_role;
+do $$declare c jsonb;r jsonb;begin
+ c:=public.crm_source_service('begin',jsonb_build_object('store_id',(select v#>>'{}' from shopify_test where k='s2'),'actor','30000000-0000-4000-8000-000000000003','provider','shopify','external_shop','shop-b.myshopify.com','nonce_hash',repeat('d',64),'cod_methods',jsonb_build_array('cod')));
+ begin perform public.crm_source_service('finish_oauth',jsonb_build_object('connection_id',c->>'id','nonce_hash',repeat('d',64),'shop_id','12x','credentials',jsonb_build_object('access_token','tok-b2','refresh_token','ref-b2','expires_in',3600)));raise exception 'BAD_SHOP_ID';exception when others then if sqlerrm<>'INVALID_REQUEST' then raise;end if;end;
+ perform public.crm_source_service('finish_oauth',jsonb_build_object('connection_id',c->>'id','nonce_hash',repeat('d',64),'shop_id','548380009','credentials',jsonb_build_object('access_token','tok-b2','refresh_token','ref-b2','expires_in',3600)));
+ assert (public.crm_source_service('by_shop',jsonb_build_object('provider','shopify','external_shop','shop-b.myshopify.com'))->>'external_shop_id')='548380009','shop id exposed to the webhook';
+ begin perform public.crm_source_service('disconnect',jsonb_build_object('connection_id',c->>'id','actor','30000000-0000-4000-8000-000000000001'));raise exception 'CROSS_TENANT_DISCONNECT';exception when others then if sqlerrm<>'FORBIDDEN' then raise;end if;end;
+ r:=public.crm_source_service('disconnect',jsonb_build_object('connection_id',c->>'id','actor','30000000-0000-4000-8000-000000000003'));
+ assert r->>'provider'='shopify' and r->>'external_shop'='shop-b.myshopify.com' and r#>>'{credentials,access_token}'='tok-b2','tokens returned once for revocation';
+ r:=public.crm_source_service('disconnect',jsonb_build_object('connection_id',c->>'id','actor','30000000-0000-4000-8000-000000000003'));
+ assert r->'credentials' is null or jsonb_typeof(r->'credentials')='null','no token on a second disconnect';
+end $$;

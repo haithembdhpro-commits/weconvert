@@ -73,3 +73,27 @@ export function normalizeOrder(raw,methods=DEFAULT_COD_METHODS){
    fee:money(fee),discount:money(discount),total:money(total),items:[...combined.values()]};
  }catch(e){if(e instanceof ShopifyError)return skip(base,e.code);throw e;}
 }
+// The webhook HMAC covers the body only: X-Shopify-Shop-Domain is not signed. A signed body captured from shop A
+// must not be accepted under shop B's header, so the body itself has to name the shop the connection belongs to.
+export function shopIdFrom(value){
+ const id=String(value??'').trim();
+ return /^[1-9]\d{0,19}$/.test(id)?id:null;
+}
+export function orderBelongsTo(raw,{shop,shopId}){
+ let url;try{url=new URL(String(raw?.order_status_url||''));}catch{url=null;}
+ if(shopId){
+  const m=url&&/^\/(\d{1,20})\/orders\//.exec(url.pathname);
+  return !!m&&m[1]===shopId;
+ }
+ // Connection made before the numeric id was stored: only the store's own myshopify host is accepted.
+ return !!url&&url.protocol==='https:'&&url.hostname.toLowerCase()===shop;
+}
+export function uninstallBelongsTo(raw,{shop,shopId}){
+ if(String(raw?.myshopify_domain||'').toLowerCase()!==shop)return false;
+ return !shopId||String(raw?.id??'')===shopId;
+}
+export function tokenExpired(credentials,now=Date.now(),marginMs=60_000){
+ const at=Date.parse(credentials?.obtained_at||''),ttl=Number(credentials?.expires_in);
+ if(!Number.isFinite(at)||!Number.isFinite(ttl))return true;
+ return at+ttl*1000-marginMs<=now;
+}

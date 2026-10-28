@@ -551,6 +551,10 @@ function eventText(e: OrderEvent, memberName: (id: string) => string) {
     "order.callback": "Rappel prévu le " + time(d.callback_at) + (d.note ? " · " + d.note : ""),
     "order.note": d.note,
     "order.assigned": "Affectation : " + memberName(d.to),
+    "source.reviewed": "Modification de la boutique source vérifiée ; fiche CRM conservée.",
+    "stock.shipped": "Colis remis à ZR : stock physique et réservation déduits.",
+    "stock.returned": "Colis retourné : quantités remises en stock.",
+    "stock.restored": "Colis annulé chez ZR : stock et réservation rétablis.",
   }
   return texts[e.kind] || e.kind
 }
@@ -666,11 +670,9 @@ export function SourcePanels({ o }: { o: Order }) {
           <>
             <p className="mt-3 text-sm">La fiche CRM a été conservée. Vérifiez la nouvelle version dans {name} avant de corriger la commande.</p>
             <Compare s={{ ...src, items: undefined }} />
-            {s.manager && (
-              <Button size="sm" variant="outline" className="mt-3" disabled={busy} onClick={() => ack("crm_source_ack")}>
-                Marquer comme vérifié
-              </Button>
-            )}
+            <Button size="sm" variant="outline" className="mt-3" disabled={busy} onClick={() => ack("crm_source_ack")}>
+              Marquer comme vérifié
+            </Button>
           </>
         )}
       </section>,

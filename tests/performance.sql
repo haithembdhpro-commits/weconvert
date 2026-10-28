@@ -45,6 +45,10 @@ do $$declare r jsonb;s uuid:=(select v from report_test where k='store');d date:
  assert (r->'summary'->>'woo_confirmation_unverified')::integer=1 and (r->'summary'->>'woo_cancellation_unverified')::integer=1,'unverified outcomes reported separately';
  assert (public.crm_overview(s)->>'woo_confirmation_unverified')::integer=1 and (public.crm_overview(s)->>'woo_cancellation_unverified')::integer=1,'dashboard provenance is scoped to this store';
  assert (r->'summary'->>'confirmed_amount')::numeric=3000,'COD amount counts confirmed only';
+ -- Owner decision 28/10: historical Woo orders leave the confirmation-rate denominator (6 orders, 2 legacy).
+ assert (r->'summary'->>'rate_base')::integer=4,'rate base excludes legacy Woo orders';
+ assert (public.crm_overview(s)->>'rate_base')::integer=(public.crm_overview(s)->>'all')::integer-2,'dashboard rate base excludes legacy';
+ assert (select sum((x->>'rate_base')::integer) from jsonb_array_elements(r->'channels') x)=4,'channel rate bases add up';
  assert jsonb_array_length(r->'days')=2 and (r->'days'->0->>'orders')::integer=5 and (r->'days'->1->>'orders')::integer=1,'Algeria local day boundary';
  assert (r->'products'->0->>'confirmed_units')::integer=3 and (r->'products'->0->>'confirmed_lines_amount')::numeric=3000,'line amounts exclude cancelled';
  assert jsonb_array_length(r->'agents')=2,'assigned and unassigned groups';
@@ -68,3 +72,11 @@ do $$declare s uuid:=(select v from report_test where k='store');d date:=(now() 
  begin perform public.crm_performance(s,d-1,d);raise exception 'CROSS_TENANT';exception when others then if sqlerrm<>'FORBIDDEN' then raise;end if;end;
 end $$;
 select 'Performance checks passed' as verification;
+
+-- Log retention: old idempotency/journal rows go, recent ones and the last 200 per connection stay.
+reset role;
+do $$declare r jsonb;begin
+ r:=crm_private.purge_logs();
+ assert r ? 'requests' and r ? 'source_events','purge reports what it removed';
+ assert exists(select 1 from cron.job where jobname='weconvert-purge-logs') or not exists(select 1 from pg_tables where schemaname='cron' and tablename='job'),'purge scheduled';
+end $$;

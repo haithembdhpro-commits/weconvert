@@ -6,7 +6,7 @@ L’écran utilise exclusivement les commandes du CRM et de WooCommerce déjà s
 | --- | --- |
 | Commandes reçues | Nombre de commandes créées dans la plage et la boutique filtrées. |
 | Confirmées | Commandes au statut CRM `confirmed`, hors anciennes fiches dont le statut a été déduit de WooCommerce (`status_origin='woo_legacy'`). Une confirmation dans le CRM est distincte du statut Woo. |
-| Taux de confirmation | Confirmées / reçues × 100, arrondi à une décimale ; « — » sans commande. |
+| Taux de confirmation | Confirmées vérifiées / base de taux × 100, arrondi à une décimale ; « — » si la base est vide. La base (`rate_base`) compte les commandes reçues **hors** statuts hérités de WooCommerce (`status_origin = woo_legacy`, décision du 28/10/2026) : ces commandes restent visibles et comptées dans « reçues », mais n'entrent ni au numérateur ni au dénominateur. |
 | À traiter | Statuts `new`, `call1`, `call2`, `call3`, `reported` et `check`. |
 | Annulées, doublons, faux numéros | Statuts CRM actuels `cancelled`, `duplicate`, `fake`, séparés. Les anciennes annulations déduites de WooCommerce sont exclues des annulations vérifiées. |
 | Montant COD confirmé | Somme des totaux des commandes actuellement confirmées, frais et remises inclus. Ce n’est ni un encaissement, ni une livraison, ni une marge. |
@@ -24,3 +24,7 @@ La page s’actualise au signal Realtime comme les autres écrans du CRM. Le rap
 La marge de contribution est le COD des colis livrés moins le coût des produits de ces commandes livrées et moins les frais ZR saisis pour **tous les colis liés** de la période, retours compris. Les coûts unitaires du catalogue actuel servent d'estimation pour les anciennes commandes : il ne s'agit pas de coûts historiques figés. Un coût produit manquant, une commande livrée sans ligne produit ou des frais transport absents rendent la marge indisponible (`—`), jamais égale à zéro par défaut. Les frais ZR peuvent être marqués explicitement à zéro s'ils sont gratuits.
 
 Les dépenses de publicité et d'exploitation saisies par date peuvent être soustraites de cette marge pour obtenir un **résultat partiel après dépenses enregistrées** ; les dépenses non saisies ne sont pas supposées nulles. Ce résultat est masqué pour un filtre par canal, faute de ventilation des dépenses. Les dépenses datées suivent la période civile, alors que les commandes sont regroupées par date de création : leur différence temporelle interdit d'assimiler ce résultat à un bénéfice net comptable. Les 100 dépenses les plus récentes sont visibles dans la liste, mais la somme du rapport porte sur toutes les dépenses de la période. Le chiffre réellement encaissé, le reversement ZR, le ROAS et l'attribution UTM/publicitaire attendent des données vérifiables supplémentaires.
+
+## Rétention des journaux techniques (28/10/2026)
+
+Une tâche planifiée (`weconvert-purge-logs`, chaque nuit à 03:23 UTC) supprime : les clés d'idempotence de plus de 30 jours, les identifiants de livraison de webhooks Shopify/YouCan de plus de 30 jours, et les journaux d'intégration/source de plus de 180 jours en gardant toujours les 200 derniers par connexion. L'historique des commandes (`crm_events`) n'est jamais purgé.

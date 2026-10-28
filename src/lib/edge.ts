@@ -10,6 +10,8 @@ export const SHOPIFY_LABELS: Record<string, string> = {
   AUTH_REQUIRED: "Votre session a expiré. Reconnectez-vous.",
   INVALID_STATE: "Le lien Shopify a expiré. Relancez la connexion.",
   SHOPIFY_AUTH: "Shopify a refusé l’autorisation ou les droits de lecture des commandes.",
+  SHOP_MISMATCH: "La commande reçue ne correspond pas à la boutique Shopify connectée ; elle a été ignorée. Reconnectez Shopify si le problème persiste.",
+  REVOKE_FAILED: "La connexion est retirée du CRM, mais Shopify n’a pas confirmé la révocation : désinstallez l’application depuis l’administration Shopify.",
   INTEGRATION_ERROR: "La connexion Shopify a échoué. Réessayez plus tard.",
   NON_COD: "Paiement hors COD : commande ignorée.",
   CURRENCY_UNSUPPORTED: "Devise différente du DZD : commande ignorée.",

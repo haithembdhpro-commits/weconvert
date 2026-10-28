@@ -23,3 +23,21 @@ test('COD methods allow store-specific manual gateways without accepting other p
  const methods=codMethods(' Paiement à la livraison ');assert.equal(normalizeOrder(order({payment_gateway_names:['Paiement à la livraison']}),methods).skip,undefined);
  assert.equal(normalizeOrder(order({payment_gateway_names:['bank_transfer']}),methods).skip,'NON_COD');
 });
+test('a signed body is only accepted for the shop it names (anti cross-shop replay)',async()=>{
+ const {orderBelongsTo,uninstallBelongsTo,shopIdFrom,tokenExpired}=await import('../supabase/functions/weconvert-shopify/domain.mjs');
+ const shop='a.myshopify.com';
+ assert.equal(orderBelongsTo({order_status_url:'https://boutique.dz/111/orders/abc/authenticate?key=x'},{shop,shopId:'111'}),true);
+ assert.equal(orderBelongsTo({order_status_url:'https://boutique.dz/222/orders/abc/authenticate?key=x'},{shop,shopId:'111'}),false);
+ assert.equal(orderBelongsTo({},{shop,shopId:'111'}),false);
+ assert.equal(orderBelongsTo({order_status_url:'https://a.myshopify.com/333/orders/x'},{shop,shopId:null}),true);
+ assert.equal(orderBelongsTo({order_status_url:'https://b.myshopify.com/333/orders/x'},{shop,shopId:null}),false);
+ assert.equal(orderBelongsTo({order_status_url:'http://a.myshopify.com/333/orders/x'},{shop,shopId:null}),false);
+ assert.equal(uninstallBelongsTo({id:111,myshopify_domain:'A.myshopify.com'},{shop,shopId:'111'}),true);
+ assert.equal(uninstallBelongsTo({id:222,myshopify_domain:'a.myshopify.com'},{shop,shopId:'111'}),false);
+ assert.equal(uninstallBelongsTo({id:111,myshopify_domain:'b.myshopify.com'},{shop,shopId:null}),false);
+ assert.equal(shopIdFrom(548380009),'548380009');assert.equal(shopIdFrom('0'),null);assert.equal(shopIdFrom('12a'),null);
+ const now=Date.parse('2026-10-28T12:00:00Z');
+ assert.equal(tokenExpired({obtained_at:'2026-10-28T11:00:00Z',expires_in:7200},now),false);
+ assert.equal(tokenExpired({obtained_at:'2026-10-28T10:00:00Z',expires_in:3600},now),true);
+ assert.equal(tokenExpired({},now),true);
+});

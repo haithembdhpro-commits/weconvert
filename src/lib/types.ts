@@ -48,6 +48,7 @@ export type Overview = Partial<{
   pending: number
   confirmed: number
   confirmed_verified: number
+  rate_base: number
   confirmed_verified_amount: number
   cancelled: number
   callbacks: number

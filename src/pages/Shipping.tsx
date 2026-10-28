@@ -224,6 +224,7 @@ export function Shipping() {
   const [status, setStatus] = useState("all")
   const [page, setPage] = useState(1)
   const [scanPage, setScanPage] = useState(1)
+  const [syncPage, setSyncPage] = useState(1)
   const [dialog, setDialog] = useState<null | { kind: "connect" | "disconnect" | "link" } | { kind: "send"; order: QueueOrder } | { kind: "history" | "reconcile" | "cost"; shipment: Shipment }>(null)
   const act = useSubmit()
   const sub = useSubmit()
@@ -279,16 +280,19 @@ export function Shipping() {
       toast(`${scanned} colis vérifiés · ${linked} rattachés · ${updated} actualisés · ${conflict} conflits · ${unmatched} sans correspondance.`)
       await refresh()
     })
+  // Five pages per click keeps each run short; the next click resumes where this one stopped.
   const sync = () =>
     act.run(async () => {
-      let p = 1, checked = 0, changed = 0, errors = 0, next: number | null = null
-      do {
+      let p = syncPage, checked = 0, changed = 0, errors = 0, next: number | null = null
+      for (let i = 0; i < 5; i++) {
         const r = await edge("weconvert-zr", "sync", { connection_id: zr!.id, page: p })
         checked += r.checked; changed += r.changed; errors += r.errors
         next = r.next_page
-        p = next || 0
-      } while (next && p <= 5)
-      toast(`${checked} suivis lus · ${changed} nouveaux statuts · ${errors} erreurs.`)
+        if (!next) break
+        p = next
+      }
+      setSyncPage(next || 1)
+      toast(`${checked} suivis lus · ${changed} nouveaux statuts · ${errors} erreurs.` + (next ? ` D’autres colis restent à actualiser : relancez pour continuer (page ${next}).` : ""))
       await refresh()
     })
 
@@ -330,7 +334,7 @@ export function Shipping() {
                   <Button variant="outline" onClick={() => setDialog({ kind: "link" })}><Search />Rattacher un suivi précis</Button>
                 </>
               )}
-              <Button variant="outline" onClick={sync} disabled={act.busy}><RefreshCw />Synchroniser les statuts</Button>
+              <Button variant="outline" onClick={sync} disabled={act.busy}><RefreshCw />{syncPage > 1 ? "Continuer la synchronisation · page " + syncPage : "Synchroniser les statuts"}</Button>
               <Button
                 variant="outline"
                 disabled={act.busy}

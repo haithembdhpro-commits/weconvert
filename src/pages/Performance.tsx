@@ -127,9 +127,9 @@ function StatusBars({ s }: { s: Row }) {
     <ul className="grid gap-4">
       {items.map(([label, n, tone]) => (
         <li key={label}>
-          <div className="flex justify-between text-sm"><b className="font-medium">{label}</b><span className="num text-muted-foreground">{f(n)} · {reportRate(n, s.orders)}</span></div>
+          <div className="flex justify-between text-sm"><b className="font-medium">{label}</b><span className="num text-muted-foreground">{f(n)} · {reportRate(n, s.rate_base ?? s.orders)}</span></div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-            <i className={cn("block h-full rounded-full", BAR[tone])} style={{ width: `${s.orders ? Math.min(100, (100 * Number(n)) / Number(s.orders)) : 0}%` }} />
+            <i className={cn("block h-full rounded-full", BAR[tone])} style={{ width: `${(s.rate_base ?? s.orders) ? Math.min(100, (100 * Number(n)) / Number(s.rate_base ?? s.orders)) : 0}%` }} />
           </div>
         </li>
       ))}
@@ -196,7 +196,7 @@ export function Performance() {
       ["WeConvert · Performance & rapports"], ["Boutique", s.storeName], ["Du", r.period.from], ["Au", r.period.to], ["Fuseau horaire", "Africa/Algiers"],
       ["Filtre canal", fl.channel ? CHANNELS[fl.channel] : "Tous"], ["Filtre agent", fl.agent ? s.memberName(fl.agent) : s.manager ? "Tous" : "Mes commandes"], [],
       ["Indicateurs", "Valeur"], ["Commandes reçues", x.orders], ["Confirmées", x.confirmed], ["À traiter", x.pending], ["Annulées", x.cancelled], ["Doublons", x.duplicate], ["Faux numéros", x.fake],
-      ["Taux de confirmation", reportRate(x.confirmed, x.orders)], ["Montant COD confirmé (DA)", x.confirmed_amount],
+      ["Taux de confirmation", reportRate(x.confirmed, x.rate_base ?? x.orders)], ["Montant COD confirmé (DA)", x.confirmed_amount],
       ["WooCommerce dans le rapport opérationnel", x.woo_orders], ["WooCommerce avec Purchase CAPI marqué envoyé", x.woo_purchase_marked], ["WooCommerce sans preuve de suivi", x.woo_unverified],
       ["Confirmations Woo historiques non vérifiées", x.woo_confirmation_unverified], ["Annulations Woo historiques non vérifiées", x.woo_cancellation_unverified],
       ...(s.manager ? [["Commandes créées dans la période et actuellement livrées (ZR)", delivered.data?.total ?? 0]] : []), [],
@@ -295,7 +295,7 @@ export function Performance() {
         <>
           <Card className={cn("mt-5 grid gap-px overflow-hidden bg-border py-0", s.manager ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3")}>
             <Kpi label="Commandes reçues" value={f(sm.orders)} foot={"Créées du " + label} icon={ShoppingBag} />
-            <Kpi label="Taux de confirmation" value={reportRate(sm.confirmed, sm.orders)} foot={`${f(sm.confirmed)} confirmées ÷ ${f(sm.orders)} reçues`} icon={BadgeCheck} />
+            <Kpi label="Taux de confirmation" value={reportRate(sm.confirmed, sm.rate_base ?? sm.orders)} foot={`${f(sm.confirmed)} confirmées ÷ ${f(sm.rate_base ?? sm.orders)} reçues hors historique Woo`} icon={BadgeCheck} />
             <Kpi label="Montant COD confirmé" value={money(sm.confirmed_amount)} foot="Promis à la livraison · non encaissé" icon={Coins} />
             {s.manager && <Kpi label="Commandes livrées" value={f(delivered.data?.total)} foot={"Créées du " + label + " · statut ZR actuel · voir la liste"} icon={Truck} onClick={scrollToDelivered} />}
           </Card>
@@ -361,11 +361,11 @@ export function Performance() {
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
             <Section title="Par canal" description="Site web, WhatsApp, Messenger, Instagram, téléphone et saisie manuelle">
               <DataTable head={["Canal", "Reçues", "Confirmées", "Taux", "Montant COD confirmé"]} right={[1, 2, 3, 4]} empty="Les commandes par message apparaîtront selon leur canal de saisie."
-                rows={(r.channels || []).map((x) => [CHANNELS[x.channel] || x.channel, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.orders), money(x.confirmed_amount)])} />
+                rows={(r.channels || []).map((x) => [CHANNELS[x.channel] || x.channel, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.rate_base ?? x.orders), money(x.confirmed_amount)])} />
             </Section>
             <Section title="Par wilaya" description="Les 10 premières selon les commandes reçues">
               <DataTable head={["Wilaya", "Reçues", "Confirmées", "Taux"]} right={[1, 2, 3]} empty="Aucune wilaya dans cette sélection."
-                rows={(r.wilayas || []).map((x) => [x.wilaya, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.orders)])} />
+                rows={(r.wilayas || []).map((x) => [x.wilaya, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.rate_base ?? x.orders)])} />
             </Section>
             <Section title="Par produit" description="Articles des commandes, variantes comprises · montant des lignes hors frais de livraison">
               <DataTable head={["Produit", "Unités commandées", "Unités confirmées", "Lignes confirmées"]} right={[1, 2, 3]} empty="Aucun produit dans cette sélection."
@@ -373,7 +373,7 @@ export function Performance() {
             </Section>
             <Section title="Par agent" description="Affectation actuelle, commandes non attribuées incluses">
               <DataTable head={["Agent actuel", "Commandes", "Confirmées", "Taux", "Montant COD confirmé"]} right={[1, 2, 3, 4]} empty="Aucune attribution dans cette sélection."
-                rows={(r.agents || []).map((x) => [x.name, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.orders), money(x.confirmed_amount)])} />
+                rows={(r.agents || []).map((x) => [x.name, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.rate_base ?? x.orders), money(x.confirmed_amount)])} />
             </Section>
           </div>
           <Notice className="mt-4">

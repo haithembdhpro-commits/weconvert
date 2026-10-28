@@ -31,7 +31,16 @@ export async function boundedText(response,max=2_000_000){
 const DZ_WILAYAS=["Adrar", "Chlef", "Laghouat", "Oum El Bouaghi", "Batna", "Béjaïa", "Biskra", "Béchar", "Blida", "Bouira", "Tamanrasset", "Tébessa", "Tlemcen", "Tiaret", "Tizi Ouzou", "Alger", "Djelfa", "Jijel", "Sétif", "Saïda", "Skikda", "Sidi Bel Abbès", "Annaba", "Guelma", "Constantine", "Médéa", "Mostaganem", "M'Sila", "Mascara", "Ouargla", "Oran", "El Bayadh", "Illizi", "Bordj Bou Arréridj", "Boumerdès", "El Tarf", "Tindouf", "Tissemsilt", "El Oued", "Khenchela", "Souk Ahras", "Tipaza", "Mila", "Aïn Defla", "Naâma", "Aïn Témouchent", "Ghardaïa", "Relizane", "Timimoun", "Bordj Badji Mokhtar", "Ouled Djellal", "Béni Abbès", "In Salah", "In Guezzam", "Touggourt", "Djanet", "El M'Ghair", "El Meniaa"];
 export function wilayaName(state){const m=/^DZ-(\d{1,2})$/i.exec(String(state??'').trim());if(!m)return state;const n=Number(m[1]);return String(n).padStart(2,'0')+(DZ_WILAYAS[n-1]?' - '+DZ_WILAYAS[n-1]:'');}
 const text=(v,n=100)=>String(v??'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,n);
-function cents(v){if(!/^-?\d+(\.\d{1,6})?$/.test(String(v??'')))throw new WooError('INVALID_AMOUNT');const n=Math.round(Number(v)*100);if(!Number.isSafeInteger(n)||Math.abs(n)>99_999_999_999)throw new WooError('INVALID_AMOUNT');return n;}
+// Exact decimal → integer cents (half away from zero). No float multiply: "1.005" is 101, not 100.
+export function cents(v){
+ const m=/^(-?)(\d{1,12})(?:\.(\d{1,6}))?$/.exec(String(v??'').trim());
+ if(!m)throw new WooError('INVALID_AMOUNT');
+ const frac=(m[3]||'').padEnd(6,'0');
+ let n=Number(m[2])*100+Number(frac.slice(0,2))+(Number(frac.slice(2))>=5000?1:0);
+ if(m[1]==='-')n=-n;
+ if(!Number.isSafeInteger(n)||Math.abs(n)>99_999_999_999)throw new WooError('INVALID_AMOUNT');
+ return n===0?0:n;
+}
 function phone(v,country){let s=text(v,40).replace(/[\s().-]/g,'');if(s.startsWith('00'))s='+'+s.slice(2);if(/^\+2130[567]\d{8}$/.test(s))s='+213'+s.slice(5);if((country==='DZ'||!country)&&/^0[567]\d{8}$/.test(s))s='+213'+s.slice(1);if((country==='DZ'||!country)&&/^213[567]\d{8}$/.test(s))s='+'+s;if(!/^\+\d{8,15}$/.test(s)||(s.startsWith('+213')&&!/^\+213[567]\d{8}$/.test(s)))throw new WooError('INVALID_PHONE');return s;}
 function utc(v){const s=String(v||'');const n=Date.parse(s.endsWith('Z')?s:s+'Z');if(!s||!Number.isFinite(n))throw new WooError('INVALID_REMOTE_DATE');return new Date(n).toISOString();}
 export function normalizeOrder(raw,methods=['cod']){

@@ -1,5 +1,5 @@
 import {createClient} from '@supabase/supabase-js';
-import {zrState,legacyParcel,newParcel,matchTerritory,parcelFacts} from './domain.mjs';
+import {zrState,legacyParcel,newParcel,matchTerritory,parcelFacts,safeRefs} from './domain.mjs';
 
 const url=Deno.env.get('SUPABASE_URL')!;
 const db=createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -83,15 +83,15 @@ async function readRemote(c:any,s:any,reference?:string){
  if(String(parcel.externalId||'')!==s.reference)throw new ZrError('REFERENCE_MISMATCH');
  const raw=String(parcel.state?.name??'');return {tracking:String(parcel.trackingNumber||parcel.id),remote_id:String(parcel.id),raw_status:raw,state:zrState(raw)};
 }
-async function wooOrders(storeId:string){
- const orders:any[]=[];
- for(let start=0;start<10000;start+=1000){
-  const {data,error}=await db.from('crm_orders').select('id,woo_number,woo_snapshot,phone,total').eq('store_id',storeId).not('woo_number','is',null).order('id').range(start,start+999);
-  if(error)throw new ZrError('ZR_RESPONSE',500);
-  orders.push(...(data||[]));
-  if((data||[]).length<1000)return orders;
- }
- throw new ZrError('ZR_RESPONSE',500);
+// Only the orders named by the parcels being processed are read (no global cap: a store can hold any volume).
+async function ordersByRefs(storeId:string,input:unknown[]){
+ const refs=safeRefs(input);
+ if(!refs.length)return [];
+ const list=refs.map(r=>`"${r}"`).join(',');
+ const {data,error}=await db.from('crm_orders').select('id,woo_number,woo_snapshot,phone,total').eq('store_id',storeId).not('woo_number','is',null)
+  .or(`woo_number.in.(${list}),woo_snapshot->>external_id.in.(${list})`).limit(1000);
+ if(error)throw new ZrError('ZR_RESPONSE',500);
+ return data||[];
 }
 function matchingOrders(orders:any[]){
  const index=new Map<string,any[]>();
@@ -121,7 +121,7 @@ async function scanPage(c:any,actor:string,page:number){
  if(c.platform!=='new'||!Number.isInteger(page)||page<1||page>500)throw new ZrError('INVALID_REQUEST');
  const response=await provider(c,'parcels/search','POST',{pageNumber:page,pageSize:50,orderBy:['createdAt desc']});
  if(!Array.isArray(response?.items))throw new ZrError('ZR_RESPONSE',502);
- const byRef=matchingOrders(await wooOrders(c.store_id));
+ const byRef=matchingOrders(await ordersByRefs(c.store_id,response.items.map((raw:any)=>parcelFacts(raw).external_id)));
  const result={scanned:response.items.length,linked:0,updated:0,unchanged:0,conflict:0,unmatched:0,next_page:response.hasNext?page+1:null};
  for(const raw of response.items){
   const ref=parcelFacts(raw).external_id,candidates=byRef.get(ref)||[];
@@ -203,7 +203,7 @@ export async function handler(req:Request):Promise<Response>{
   }
   if(action==='link'){
    if(c.platform!=='new'||!body.order_ref||!body.tracking||!(/^[a-z0-9-]{3,100}$/i.test(String(body.tracking))))throw new ZrError('INVALID_REQUEST');
-   const orders=matchingOrders(await wooOrders(c.store_id)).get(String(body.order_ref).trim())||[];
+   const orders=matchingOrders(await ordersByRefs(c.store_id,[String(body.order_ref).trim()])).get(String(body.order_ref).trim())||[];
    if(orders.length!==1)throw new ZrError('NOT_FOUND',404);
    const parcel=await provider(c,'parcels/'+encodeURIComponent(String(body.tracking).trim()));
    if(parcelFacts(parcel).external_id!==String(body.order_ref).trim())throw new ZrError('REFERENCE_MISMATCH');

@@ -56,3 +56,13 @@ export function parcelFacts(raw){
   updated_at:p.lastStateUpdateAt??p.updatedAt??null
  };
 }
+// References that can be placed in a PostgREST in.(...) list without escaping; anything else is left unmatched.
+export function safeRefs(input,max=100){
+ const out=new Set();
+ for(const v of Array.isArray(input)?input:[]){
+  const ref=String(v??'').trim();
+  if(/^[A-Za-z0-9_-]{1,64}$/.test(ref))out.add(ref);
+  if(out.size>=max)break;
+ }
+ return [...out];
+}

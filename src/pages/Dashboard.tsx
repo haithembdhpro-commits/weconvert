@@ -92,8 +92,8 @@ export function Dashboard() {
         <Stat label="À confirmer" value={f(m.pending)} meta={`${f(m.pending)} sur ${f(m.all)} commandes visibles`} icon={Phone} href="#confirmation" />
         <Stat
           label="Taux de confirmation"
-          value={reportRate(m.confirmed_verified, m.all)}
-          meta={`${f(m.confirmed_verified)} vérifiées ÷ ${f(m.all)} reçues depuis l’ouverture`}
+          value={reportRate(m.confirmed_verified, m.rate_base ?? m.all)}
+          meta={`${f(m.confirmed_verified)} vérifiées ÷ ${f(m.rate_base ?? m.all)} reçues (hors historique WooCommerce)`}
           icon={CheckCircle2}
           href="#orders/confirmed"
         />

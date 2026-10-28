@@ -97,17 +97,26 @@ do $$declare w uuid:=(select (v#>>'{}')::uuid from h where k='wa');oid uuid:=(se
  select version into ov from public.crm_orders where id=oid;
  begin perform public.crm_command(w,'order.status',jsonb_build_object('id',oid,'version',ov,'status','cancelled','reason','Client injoignable'),gen_random_uuid());raise exception 'SHIPPED_ORDER_CANCELLED';
  exception when others then if sqlerrm<>'SHIPMENT_ACTIVE' then raise;end if;end;
- assert (select reserved=3 from public.crm_products where sku='HA-1'),'reservation kept';
+ -- Owner decision 28/10: the handoff to ZR consumes the reservation (10 physical, 3 reserved → 7 physical, 0 reserved).
+ assert (select reserved=0 and stock=7 from public.crm_products where sku='HA-1'),'stock consumed at handoff';
+ assert (select not stock_reserved from public.crm_orders where id=oid),'order no longer holds a reservation';
+ assert (select stock_consumed from public.crm_shipments where reference='REF-H'),'shipment marked consumed';
+ assert exists(select 1 from public.crm_events where order_id=oid and kind='stock.shipped'),'stock movement in order history';
 end $$;
--- Agents cannot acknowledge a source change; managers can.
+-- Source change acknowledgement: assigned agent, other tenant, manager.
 reset role;
 update public.crm_orders set source_attention=true where id=(select (v#>>'{}')::uuid from h where k='o');
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"50000000-0000-4000-8000-0000000000a2","role":"authenticated"}',true);
+-- Owner decision 28/10: an agent may acknowledge a source change on an order assigned to them.
 do $$declare oid uuid:=(select (v#>>'{}')::uuid from h where k='o');ov integer;begin
  select version into ov from public.crm_orders where id=oid;
- begin perform public.crm_source_ack(oid,ov);raise exception 'AGENT_ACK';exception when others then if sqlerrm<>'FORBIDDEN' then raise;end if;end;
+ perform public.crm_source_ack(oid,ov);
+ assert (select not source_attention from public.crm_orders where id=oid),'assigned agent acknowledged';
 end $$;
+reset role;
+update public.crm_orders set source_attention=true where id=(select (v#>>'{}')::uuid from h where k='o');
+set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"50000000-0000-4000-8000-0000000000b1","role":"authenticated"}',true);
 do $$declare oid uuid:=(select (v#>>'{}')::uuid from h where k='o');begin
  begin perform public.crm_source_ack(oid,1);raise exception 'CROSS_TENANT_ACK';exception when others then if sqlerrm<>'NOT_FOUND' then raise;end if;end;
@@ -118,6 +127,31 @@ do $$declare oid uuid:=(select (v#>>'{}')::uuid from h where k='o');ov integer;b
  perform public.crm_source_ack(oid,ov);
  assert (select not source_attention from public.crm_orders where id=oid),'manager acknowledged';
 end $$;
+
+-- Parcel cancelled at ZR: stock and reservation restored; handed again: consumed; returned: restocked only.
+reset role;
+do $$declare oid uuid:=(select (v#>>'{}')::uuid from h where k='o');begin
+ update public.crm_shipments set state='cancelled' where reference='REF-H';
+ assert (select stock=10 and reserved=3 from public.crm_products where sku='HA-1'),'cancel restores stock and reservation';
+ assert (select stock_reserved from public.crm_orders where id=oid),'order reserved again';
+ update public.crm_shipments set state='in_transit' where reference='REF-H';
+ assert (select stock=7 and reserved=0 from public.crm_products where sku='HA-1'),'handed again: consumed once';
+ update public.crm_shipments set raw_status='En route' where reference='REF-H';
+ assert (select stock=7 and reserved=0 from public.crm_products where sku='HA-1'),'same state: no double consumption';
+ update public.crm_shipments set state='returned' where reference='REF-H';
+ assert (select stock=10 and reserved=0 from public.crm_products where sku='HA-1'),'return restocks without reserving';
+ assert (select not stock_reserved from public.crm_orders where id=oid),'returned order holds no reservation';
+ update public.crm_shipments set state='returned',raw_status='Retour confirmé' where reference='REF-H';
+ assert (select stock=10 from public.crm_products where sku='HA-1'),'no double restock';
+ assert (select count(*)=4 from public.crm_events where order_id=oid and kind like 'stock.%'),'each movement recorded';
+end $$;
+-- An imported historical parcel never touches stock (nothing was reserved by the CRM).
+do $$declare oid uuid:=(select (v#>>'{}')::uuid from h where k='o');begin
+ update public.crm_shipments set state='in_transit' where reference='REF-H';
+ assert (select stock=10 and reserved=0 from public.crm_products where sku='HA-1'),'unreserved order: no consumption';
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"50000000-0000-4000-8000-0000000000a1","role":"authenticated"}',true);
 
 -- Expenses: same request id stored once.
 do $$declare s uuid:=(select (v#>>'{}')::uuid from h where k='sa');rq uuid:=gen_random_uuid();p jsonb;begin
