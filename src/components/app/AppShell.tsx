@@ -59,7 +59,7 @@ function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () 
       <button
         type="button"
         onClick={() => setStoreOpen(true)}
-        className="flex min-h-12 items-center gap-3 rounded-lg border bg-card px-3 py-2 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-h-11 coarse:min-h-12 items-center gap-3 rounded-lg border bg-card px-3 py-2 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="grid size-8 place-items-center rounded-md bg-secondary text-secondary-foreground">
           <Store className="size-4" aria-hidden />
@@ -84,7 +84,7 @@ function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () 
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring",
+                    "flex min-h-9 coarse:min-h-11 items-center gap-3 rounded-md px-3 text-sm outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring",
                     active ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground" : "text-sidebar-foreground",
                   )}
                 >
@@ -101,7 +101,7 @@ function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () 
           </div>
         ))}
       </nav>
-      <a href="#settings" onClick={onNavigate} className="flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+      <a href="#settings" onClick={onNavigate} className="flex min-h-11 coarse:min-h-12 items-center gap-3 rounded-lg border px-3 py-2 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
         <Avatar name={me?.display_name || s.user?.email || "?"} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{me?.display_name || s.user?.email}</span>
@@ -132,7 +132,7 @@ export function StoreSwitcher({ open, onOpenChange }: { open: boolean; onOpenCha
                 s.selectStore(st.id)
                 onOpenChange(false)
               }}
-              className="flex min-h-12 items-center gap-3 rounded-lg border px-3 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-11 coarse:min-h-12 items-center gap-3 rounded-lg border px-3 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Store className="size-4 text-muted-foreground" aria-hidden />
               <span className="flex-1 font-medium">{st.name}</span>
@@ -251,7 +251,7 @@ export function AppShell({ route, children }: { route: RouteState; children: Rea
         </SheetContent>
       </Sheet>
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur sm:px-6">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenu(true)} aria-label="Ouvrir le menu" aria-expanded={menu}>
             <Menu />
           </Button>

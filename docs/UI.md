@@ -22,7 +22,7 @@ Contrastes calculés (WCAG) :
 - sombre : bouton `#001320` sur `#00b2ff` 7,91:1 · texte secondaire `#85c8ff` sur `#001b2b` 9,82:1 · bordure de champ `#0071a4` 3,50:1.
 - `#00b2ff` n'est jamais un fond de texte blanc en clair (2,4:1). Les statuts restent vert/ambre/rouge/violet et portent toujours leur libellé.
 
-Règles : contrôles ≥ 44 px (48 px pour les actions fréquentes sur mobile), focus visible, tables utilisables au clavier, cartes par commande sur téléphone, navigation basse mobile. Les recherches, filtres, sélections et brouillons sont dans l'état des composants : un rafraîchissement temps réel ne les touche pas. Aucune donnée factice : un module non branché l'indique.
+Règles de taille (décision du 28/10/2026, alignée sur Stripe, Shopify Polaris et shadcn) : **à la souris**, texte courant 14 px, boutons et champs 36 px (petits 32 px), titres de page 20–24 px, chiffres clés 28 px, en-tête 56 px — cibles ≥ 24 px (WCAG 2.2 AA, 2.5.8). **Au doigt** (`@media (pointer: coarse)`, variante Tailwind `coarse:` déclarée dans `src/index.css`), cibles ≥ 44 px (WCAG AAA 2.5.5, Apple 44 pt). Focus visible, tables utilisables au clavier, cartes par commande sur téléphone, navigation basse mobile. Les recherches, filtres, sélections et brouillons sont dans l'état des composants : un rafraîchissement temps réel ne les touche pas. Aucune donnée factice : un module non branché l'indique.
 
 ## Sécurité navigateur
 - CSP stricte sans script inline (`scripts/postbuild.mjs` l'injecte dans `dist/index.html` et dans `dist/_headers`), `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, HSTS.

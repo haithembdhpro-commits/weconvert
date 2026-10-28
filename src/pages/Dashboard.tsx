@@ -64,17 +64,17 @@ function Kpi({
   return (
     <Card className="group relative gap-0 p-5 transition-shadow hover:shadow-md">
       <div className="flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-lg bg-secondary text-secondary-foreground">
+        <span className="grid size-8 place-items-center rounded-lg bg-secondary text-secondary-foreground">
           <Icon className="size-[18px]" aria-hidden />
         </span>
         <h2 className="leading-tight font-medium">{title}</h2>
-        <a href={href} aria-label={"Ouvrir : " + title} className="ml-auto grid size-11 place-items-center rounded-lg text-muted-foreground outline-none after:absolute after:inset-0 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+        <a href={href} aria-label={"Ouvrir : " + title} className="ml-auto grid size-8 coarse:size-11 place-items-center rounded-lg text-muted-foreground outline-none after:absolute after:inset-0 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           <ArrowUpRight className="size-[18px]" aria-hidden />
         </a>
       </div>
       <div className="mt-4 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="num text-[2.25rem] leading-none font-semibold tracking-tight">{value}</p>
+          <p className="num text-[1.75rem] leading-none font-semibold tracking-tight">{value}</p>
           <p className="mt-2 text-[0.8125rem]">{delta}</p>
         </div>
         <span className={cn("shrink-0", tone)}>{children}</span>
@@ -109,7 +109,7 @@ function AccentPreview() {
           aria-checked={accent === id}
           onClick={() => setAccent(id)}
           className={cn(
-            "inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex min-h-8 coarse:min-h-11 items-center gap-2 rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
             accent === id ? "bg-secondary font-medium text-secondary-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -170,7 +170,7 @@ export function Dashboard() {
     <>
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[2rem] leading-tight font-semibold tracking-tight">{first ? `Bonjour, ${first}` : "Bonjour"}</h1>
+          <h1 className="text-2xl leading-tight font-semibold tracking-tight">{first ? `Bonjour, ${first}` : "Bonjour"}</h1>
           <p className="text-muted-foreground">
             <Ago at={Math.max(ov.dataUpdatedAt, cur.dataUpdatedAt)} /> · {s.storeName}
           </p>
@@ -186,7 +186,7 @@ export function Dashboard() {
                 aria-checked={n === x}
                 onClick={() => setN(x)}
                 className={cn(
-                  "num min-h-9 rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "num min-h-8 coarse:min-h-11 rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   n === x ? "bg-secondary font-medium text-secondary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -247,7 +247,7 @@ export function Dashboard() {
         <Card className="gap-0 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Activité des commandes</h2>
+              <h2 className="text-base font-semibold">Activité des commandes</h2>
               <p className="text-sm text-muted-foreground">Par jour de création · {period}</p>
             </div>
             {c && (
@@ -257,7 +257,7 @@ export function Dashboard() {
             )}
           </div>
           <p className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="num text-[2.5rem] leading-none font-semibold tracking-tight">{c ? f(c.orders) : "…"}</span>
+            <span className="num text-[2rem] leading-none font-semibold tracking-tight">{c ? f(c.orders) : "…"}</span>
             <span className="text-sm">
               <Delta now={c ? c.orders : null} before={p ? p.orders : null} />
             </span>
@@ -276,10 +276,10 @@ export function Dashboard() {
         <Card className="gap-0 p-5 sm:p-6">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h2 className="text-lg font-semibold">Wilayas</h2>
+              <h2 className="text-base font-semibold">Wilayas</h2>
               <p className="text-sm text-muted-foreground">Top 10 des commandes · {period}</p>
             </div>
-            <a href="#performance" aria-label="Ouvrir le rapport par wilaya" className="grid size-11 place-items-center rounded-lg border text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+            <a href="#performance" aria-label="Ouvrir le rapport par wilaya" className="grid size-8 coarse:size-11 place-items-center rounded-lg border text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
               <ArrowUpRight className="size-[18px]" aria-hidden />
             </a>
           </div>
@@ -312,7 +312,7 @@ export function Dashboard() {
         <Card className="gap-0 overflow-hidden py-0">
           <div className="flex flex-wrap items-center justify-between gap-2 p-5 sm:px-6">
             <div>
-              <h2 className="text-lg font-semibold">Dernières commandes</h2>
+              <h2 className="text-base font-semibold">Dernières commandes</h2>
               <p className="text-sm text-muted-foreground">Changez le statut directement depuis le badge</p>
             </div>
             <Button variant="outline" onClick={() => navigate("orders")}>
@@ -323,12 +323,12 @@ export function Dashboard() {
           <OrdersTable orders={latest.data?.items || []} compact />
         </Card>
         <Card className="gap-0 p-5 sm:p-6">
-          <h2 className="text-lg font-semibold">Votre journée</h2>
+          <h2 className="text-base font-semibold">Votre journée</h2>
           <p className="text-sm text-muted-foreground">Les actions qui comptent maintenant</p>
           <ul className="mt-4 grid gap-1">
             {tasks.map((t) => (
               <li key={t.href + t.label}>
-                <a href={t.href} className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+                <a href={t.href} className="flex min-h-12 items-center gap-3 rounded-lg px-2 py-1.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
                   <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
                     <t.icon className="size-[18px]" aria-hidden />
                   </span>

@@ -31,7 +31,7 @@ export function Settings() {
                 key={st.id}
                 type="button"
                 onClick={() => s.selectStore(st.id)}
-                className="flex min-h-12 items-center gap-3 rounded-lg border px-3 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-h-11 coarse:min-h-12 items-center gap-3 rounded-lg border px-3 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Store className="size-4 text-muted-foreground" aria-hidden />
                 <span className="flex-1 font-medium">{st.name}</span>

@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+/* Two densities (28/10/2026): compact with a mouse (Stripe/Polaris-like, WCAG 2.2 AA 24 px), 44 px+ targets for touch. */
+@custom-variant coarse (@media (pointer: coarse));
 
 /* WeConvert — tokens shadcn, palette Picton Blue (Kigen.design). Contrastes calculés : voir docs/UI-REACT.md */
 :root {

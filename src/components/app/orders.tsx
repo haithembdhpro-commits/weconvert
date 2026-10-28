@@ -73,7 +73,7 @@ export function StatusMenu({ o }: { o: Order }) {
           type="button"
           onClick={(e) => e.stopPropagation()}
           aria-label={"Changer le statut de " + orderCode(o) + " (actuel : " + (STATUS[o.status]?.[0] || o.status) + ")"}
-          className="-mx-1.5 inline-flex min-h-11 items-center gap-1 rounded-md px-1.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          className="-mx-1.5 inline-flex min-h-8 coarse:min-h-11 items-center gap-1 rounded-md px-1.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
         >
           <StatusBadge status={o.status} />
           <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
@@ -84,40 +84,40 @@ export function StatusMenu({ o }: { o: Order }) {
           <>
             <DropdownMenuLabel>Appel sans réponse</DropdownMenuLabel>
             {CALLS.map((n) => (
-              <DropdownMenuItem key={n} className="min-h-10" disabled={n <= o.attempts} onSelect={() => ui.noAnswer(o, n)}>
+              <DropdownMenuItem key={n} className="min-h-8 coarse:min-h-10" disabled={n <= o.attempts} onSelect={() => ui.noAnswer(o, n)}>
                 {n === 3 ? "Appel 3+" : "Appel " + n}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "confirmed")}>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.setStatus(o, "confirmed")}>
               Confirmée
             </DropdownMenuItem>
-            <DropdownMenuItem className="min-h-10" onSelect={() => ui.callback(o)}>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.callback(o)}>
               Reportée (rappel daté)…
             </DropdownMenuItem>
-            <DropdownMenuItem className="min-h-10" disabled={o.status === "check"} onSelect={() => ui.setStatus(o, "check")}>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" disabled={o.status === "check"} onSelect={() => ui.setStatus(o, "check")}>
               À vérifier
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "fake")}>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.setStatus(o, "fake")}>
               Faux numéro…
             </DropdownMenuItem>
-            <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "duplicate")}>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.setStatus(o, "duplicate")}>
               Doublon…
             </DropdownMenuItem>
-            <DropdownMenuItem className="min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
               Annulée…
             </DropdownMenuItem>
           </>
         ) : (
           <>
             {canReopen && (
-              <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "new")}>
+              <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.setStatus(o, "new")}>
                 Rouvrir (Nouvelle)…
               </DropdownMenuItem>
             )}
             {canCancel && (
-              <DropdownMenuItem className="min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
+              <DropdownMenuItem className="min-h-8 coarse:min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
                 Annulée…
               </DropdownMenuItem>
             )}
