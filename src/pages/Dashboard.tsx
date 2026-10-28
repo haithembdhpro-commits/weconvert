@@ -7,7 +7,7 @@ import { EmptyState, Notice, PageHeader } from "@/components/app/page"
 import { OrdersTable, useOrderUI } from "@/components/app/orders"
 import { rpc } from "@/lib/api"
 import { f, money } from "@/lib/format"
-import { useOrders, useOverview } from "@/lib/queries"
+import { useOrderBoard, useOverview } from "@/lib/queries"
 import { navigate } from "@/lib/router"
 import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
@@ -58,7 +58,7 @@ export function Dashboard() {
   const s = useSession()
   const ui = useOrderUI()
   const m = useOverview().data || {}
-  const latest = useOrders({ status: "all", q: "", page: 1, agent: "", ascending: false, size: 5 })
+  const latest = useOrderBoard({ stage: "all", status: "all", q: "", page: 1, agent: "", ascending: false, size: 5 })
   const range = reportRange("7")
   const delivered = useQuery({
     queryKey: ["store", s.store, "delivered7", range.from, range.to],

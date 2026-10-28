@@ -37,6 +37,9 @@ export type Order = {
   source_snapshot?: Record<string, any> | null
   source_status?: string | null
   source_attention?: boolean
+  /** Board only: logistic stage and the CRM parcel (carrier state, not a cash collection). */
+  stage?: OrderStage
+  shipment?: { state: string; raw_status: string | null; tracking: string | null; updated_at: string } | null
   source_external_id?: string | null
   events?: OrderEvent[]
 }
@@ -68,3 +71,6 @@ export type Product = {
   version: number
   store_id: string
 }
+
+export type OrderStage = "new" | "preparing" | "dispatched" | "delivered" | "returned" | "closed"
+export type OrderBoard = { items: Order[]; total: number; stages: Partial<Record<OrderStage, number>> }

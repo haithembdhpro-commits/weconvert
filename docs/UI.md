@@ -38,3 +38,10 @@ npm run test:sql  # migrations + scénarios SQL sur un Postgres local jetable
 VITE_SUPABASE_URL=https://<ref>.supabase.co VITE_SUPABASE_KEY=sb_publishable_... npm run build   # → dist/
 ```
 Sans variables, le build vise le projet de `src/domain/config.json` (production). Pour staging, toujours passer les deux variables.
+
+## Commandes façon Confirmoo (28/10/2026)
+- La page **Commandes** s'ouvre sur 7 cartes d'étape avec compteurs : Toutes · Nouvelles (à confirmer) · En préparation (confirmées, pas encore chez le transporteur) · Expédiées · Livrées · Retournées · Annulées (annulées, doublons, faux numéros). Expédiée/Livrée/Retournée viennent du colis ZR : c'est un statut transporteur, pas un encaissement.
+- Le **badge de statut** est cliquable : Appel 1 / 2 / 3+ (on peut sauter à l'appel 3, jamais revenir en arrière), Confirmée, Reportée (rappel daté), À vérifier, Faux numéro, Doublon, Annulée. Les responsables peuvent rouvrir ou annuler une commande confirmée tant qu'aucun colis actif n'existe. Le serveur reste juge (RPC `crm_command`).
+- Colonnes **Livraison** (état ZR + n° de suivi) et **Source** (WooCommerce, Shopify, YouCan ou canal saisi) ; bouton **Colonnes** pour masquer Produit, Adresse, Agent, Livraison, Source, Date (choix mémorisé dans le navigateur).
+- La recherche trouve aussi un n° de suivi. Les anciens liens `#orders/pending`, `#orders/cancelled_all` et `#orders/confirmed` restent valides.
+- Données : RPC `crm_order_board` (RLS appliquée : un agent ne voit que ses commandes et ses compteurs). L'écran **Confirmation** (file + fiche d'appel) est conservé en complément.

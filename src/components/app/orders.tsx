@@ -1,18 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Check, ChevronRight, Clock, Pencil, Plus, Search, Users, X } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Clock, Pencil, Plus, Search, Users, X } from "lucide-react"
 import { CHANNELS, PENDING, STATUS, initialsOf, localInputToISO, orderAmount } from "@domain/domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, FormError, FormField, Loading, Notice } from "@/components/app/page"
 import { StatusBadge, ToneBadge } from "@/components/app/tone"
 import { rpc, safeError, wooLabel } from "@/lib/api"
+import { ZR_STATES } from "@/lib/edge"
 import { f, money, orderCode, shortDate, time } from "@/lib/format"
 import { searchProducts, useOrderDetail } from "@/lib/queries"
 import { useSession } from "@/lib/session"
@@ -20,23 +22,132 @@ import type { Order, OrderEvent, Product } from "@/lib/types"
 
 /* ------------------------------------------------------------------ table */
 
+/** Optional columns of the orders table (the order number, client, amount and status are always shown). */
+export const ORDER_COLUMNS: [string, string][] = [
+  ["product", "Produit"],
+  ["wilaya", "Adresse"],
+  ["agent", "Agent"],
+  ["delivery", "Livraison"],
+  ["source", "Source"],
+  ["date", "Date"],
+]
+const ALL_COLUMNS = new Set(ORDER_COLUMNS.map(([k]) => k))
+const PROVIDERS: Record<string, string> = { shopify: "Shopify", youcan: "YouCan" }
+
+function sourceLabel(o: Order) {
+  if (o.woo_snapshot) return "WooCommerce"
+  if (o.source_provider) return PROVIDERS[o.source_provider] || o.source_provider
+  return CHANNELS[o.channel] || o.channel
+}
+
+/** Carrier state of the CRM parcel. A carrier "Livré" is not proof of cash collection. */
+export function DeliveryBadge({ o }: { o: Order }) {
+  if (!o.shipment) return <span className="text-sm text-muted-foreground">—</span>
+  const [label, tone] = ZR_STATES[o.shipment.state] || [o.shipment.state, "neutral"]
+  return (
+    <span className="grid gap-0.5">
+      <ToneBadge tone={tone}>{label}</ToneBadge>
+      {o.shipment.tracking && <span className="num text-xs text-muted-foreground">{o.shipment.tracking}</span>}
+    </span>
+  )
+}
+
+const CALLS = [1, 2, 3]
+
+/**
+ * Confirmoo-style status: the badge opens the transitions allowed for this order.
+ * Server rules still decide (RPC crm_command); the menu only hides moves that would be refused.
+ */
+export function StatusMenu({ o }: { o: Order }) {
+  const s = useSession()
+  const ui = useOrderUI()
+  const pending = PENDING.includes(o.status)
+  const shipped = !!o.shipment && o.shipment.state !== "cancelled"
+  const canReopen = s.manager && !pending && !shipped
+  const canCancel = s.manager && o.status === "confirmed" && !shipped
+  if (!pending && !canReopen && !canCancel) return <StatusBadge status={o.status} />
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          aria-label={"Changer le statut de " + orderCode(o) + " (actuel : " + (STATUS[o.status]?.[0] || o.status) + ")"}
+          className="-mx-1.5 inline-flex min-h-11 items-center gap-1 rounded-md px-1.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <StatusBadge status={o.status} />
+          <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56" onClick={(e) => e.stopPropagation()}>
+        {pending ? (
+          <>
+            <DropdownMenuLabel>Appel sans réponse</DropdownMenuLabel>
+            {CALLS.map((n) => (
+              <DropdownMenuItem key={n} className="min-h-10" disabled={n <= o.attempts} onSelect={() => ui.noAnswer(o, n)}>
+                {n === 3 ? "Appel 3+" : "Appel " + n}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "confirmed")}>
+              Confirmée
+            </DropdownMenuItem>
+            <DropdownMenuItem className="min-h-10" onSelect={() => ui.callback(o)}>
+              Reportée (rappel daté)…
+            </DropdownMenuItem>
+            <DropdownMenuItem className="min-h-10" disabled={o.status === "check"} onSelect={() => ui.setStatus(o, "check")}>
+              À vérifier
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "fake")}>
+              Faux numéro…
+            </DropdownMenuItem>
+            <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "duplicate")}>
+              Doublon…
+            </DropdownMenuItem>
+            <DropdownMenuItem className="min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
+              Annulée…
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            {canReopen && (
+              <DropdownMenuItem className="min-h-10" onSelect={() => ui.setStatus(o, "new")}>
+                Rouvrir (Nouvelle)…
+              </DropdownMenuItem>
+            )}
+            {canCancel && (
+              <DropdownMenuItem className="min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
+                Annulée…
+              </DropdownMenuItem>
+            )}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export function OrdersTable({
   orders,
   compact = false,
   selected,
   onToggle,
   onToggleAll,
+  columns = ALL_COLUMNS,
 }: {
   orders: Order[]
   compact?: boolean
   selected?: Set<string>
   onToggle?: (id: string, on: boolean) => void
   onToggleAll?: (on: boolean) => void
+  columns?: Set<string>
 }) {
   const s = useSession()
   const ui = useOrderUI()
   const selectable = !compact && s.manager && !!selected
   const allOn = selectable && orders.length > 0 && orders.every((o) => selected!.has(o.id))
+  const show = (k: string) => columns.has(k) && !(compact && (k === "agent" || k === "source"))
   if (!orders.length) return <EmptyState title="Aucune commande" description="Ajoutez une commande ou adaptez votre recherche." />
   return (
     <>
@@ -48,10 +159,7 @@ export function OrdersTable({
             <Checkbox checked={selected!.has(o.id)} onCheckedChange={(v) => onToggle?.(o.id, !!v)} aria-label={"Sélectionner " + orderCode(o)} className="mt-1 size-5" />
           )}
           <button type="button" onClick={() => ui.openOrder(o.id)} className="grid min-w-0 flex-1 gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="flex items-center justify-between gap-2">
-              <span className="num text-sm font-semibold text-primary">#{orderCode(o)}</span>
-              <StatusBadge status={o.status} />
-            </span>
+            <span className="num text-sm font-semibold text-primary">#{orderCode(o)}</span>
             <span className="flex items-baseline justify-between gap-2">
               <span className="truncate font-medium">{o.customer_name}</span>
               <span className="num shrink-0 font-semibold">{money(o.total)}</span>
@@ -60,10 +168,14 @@ export function OrdersTable({
               {o.phone} · {o.wilaya} · {shortDate(o.created_at)}
             </span>
             {o.callback_at && <span className="num text-xs text-warning">Rappel {time(o.callback_at)}</span>}
+            {o.shipment && <span className="text-xs text-muted-foreground">Livraison : {(ZR_STATES[o.shipment.state] || [o.shipment.state])[0]}</span>}
             {(o.woo_attention || o.status_origin === "woo_legacy") && (
               <span className="text-xs text-muted-foreground">{o.woo_attention ? "WooCommerce à vérifier" : "Statut Woo non vérifié"}</span>
             )}
           </button>
+          <div className="shrink-0">
+            <StatusMenu o={o} />
+          </div>
         </li>
       ))}
     </ul>
@@ -78,12 +190,14 @@ export function OrdersTable({
             )}
             <TableHead>N° commande</TableHead>
             <TableHead>Client</TableHead>
-            <TableHead>Produit</TableHead>
-            <TableHead>Wilaya</TableHead>
+            {show("product") && <TableHead>Produit</TableHead>}
+            {show("wilaya") && <TableHead>Adresse</TableHead>}
             <TableHead className="text-right">Montant COD</TableHead>
-            {!compact && <TableHead>Agent</TableHead>}
+            {show("agent") && <TableHead>Agent</TableHead>}
             <TableHead>Statut</TableHead>
-            <TableHead>Date</TableHead>
+            {show("delivery") && <TableHead>Livraison</TableHead>}
+            {show("source") && <TableHead>Source</TableHead>}
+            {show("date") && <TableHead>Date</TableHead>}
             <TableHead>
               <span className="sr-only">Ouvrir</span>
             </TableHead>
@@ -108,7 +222,7 @@ export function OrdersTable({
                 >
                   #{orderCode(o)}
                 </button>
-                <span className="block text-xs text-muted-foreground">{CHANNELS[o.channel]}</span>
+                {!show("source") && <span className="block text-xs text-muted-foreground">{CHANNELS[o.channel]}</span>}
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2.5">
@@ -121,22 +235,40 @@ export function OrdersTable({
                   </span>
                 </div>
               </TableCell>
-              <TableCell>
-                <span className="block">{o.items?.[0]?.product_name || "—"}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {(o.items || []).length > 1 ? "+" + ((o.items || []).length - 1) + " autre(s) produit(s)" : f(o.items?.[0]?.quantity) + " article(s)"}
-                </span>
-              </TableCell>
-              <TableCell className="text-muted-foreground">{o.wilaya}</TableCell>
+              {show("product") && (
+                <TableCell>
+                  <span className="block">{o.items?.[0]?.product_name || "—"}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {(o.items || []).length > 1 ? "+" + ((o.items || []).length - 1) + " autre(s) produit(s)" : f(o.items?.[0]?.quantity) + " article(s)"}
+                  </span>
+                </TableCell>
+              )}
+              {show("wilaya") && (
+                <TableCell>
+                  <span className="block">{o.wilaya}</span>
+                  <span className="block text-xs text-muted-foreground">{o.commune || "Commune à compléter"}</span>
+                </TableCell>
+              )}
               <TableCell className="num text-right font-semibold">{money(o.total)}</TableCell>
-              {!compact && <TableCell>{s.memberName(o.assigned_to)}</TableCell>}
+              {show("agent") && <TableCell>{s.memberName(o.assigned_to)}</TableCell>}
               <TableCell>
-                <StatusBadge status={o.status} />
+                <StatusMenu o={o} />
                 {o.status_origin === "woo_legacy" && <span className="mt-1 block text-xs text-muted-foreground">Statut Woo non vérifié</span>}
                 {o.woo_attention && <span className="mt-1 block text-xs text-muted-foreground">WooCommerce à vérifier</span>}
                 {o.callback_at && <span className="num mt-1 block text-xs text-muted-foreground">{time(o.callback_at)}</span>}
               </TableCell>
-              <TableCell className="num text-muted-foreground">{shortDate(o.created_at)}</TableCell>
+              {show("delivery") && (
+                <TableCell>
+                  <DeliveryBadge o={o} />
+                </TableCell>
+              )}
+              {show("source") && (
+                <TableCell>
+                  <span className="block">{sourceLabel(o)}</span>
+                  <span className="block text-xs text-muted-foreground">{CHANNELS[o.channel]}</span>
+                </TableCell>
+              )}
+              {show("date") && <TableCell className="num text-muted-foreground">{shortDate(o.created_at)}</TableCell>}
               <TableCell>
                 <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
               </TableCell>
@@ -158,7 +290,7 @@ type Ui = {
   assign: (ids: { id: string; version: number }[], current?: string | null) => void
   callback: (o: Order) => void
   setStatus: (o: Order, status: string) => Promise<void>
-  noAnswer: (o: Order) => Promise<void>
+  noAnswer: (o: Order, attempt?: number) => Promise<void>
 }
 const UiCtx = createContext<Ui | null>(null)
 export const useOrderUI = () => {
@@ -209,11 +341,11 @@ export function OrderUIProvider({ children, onAssigned }: { children: ReactNode;
           busy.current = false
         }
       },
-      noAnswer: async (o) => {
+      noAnswer: async (o, attempt) => {
         if (busy.current) return
         busy.current = true
         try {
-          await mutate("order.call", { id: o.id, version: o.version })
+          await mutate("order.call", attempt ? { id: o.id, version: o.version, attempt } : { id: o.id, version: o.version })
         } catch (e) {
           toast.error(safeError(e))
         } finally {

@@ -26,3 +26,16 @@ describe("format", () => {
     expect(money(4900).replace(/\s/g, " ")).toBe("4 900 DA")
   })
 })
+
+describe("delivery column", () => {
+  it("shows the carrier state and tracking, or a dash without parcel", async () => {
+    const { DeliveryBadge } = await import("@/components/app/orders")
+    const base = { id: "1", number: 1, version: 1, customer_name: "A", phone: "", wilaya: "", commune: "", address: "", channel: "website", delivery_type: "home", status: "confirmed", assigned_to: null, callback_at: null, attempts: 0, fee: 0, discount: 0, total: 0, created_at: "", items: [] } as any
+    const { unmount } = render(<DeliveryBadge o={{ ...base, shipment: { state: "delivered", raw_status: "Livré", tracking: "TRK-1", updated_at: "" } }} />)
+    expect(screen.getByText("Livré")).toBeInTheDocument()
+    expect(screen.getByText("TRK-1")).toBeInTheDocument()
+    unmount()
+    render(<DeliveryBadge o={{ ...base, shipment: null }} />)
+    expect(screen.getByText("—")).toBeInTheDocument()
+  })
+})

@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { rpc, select } from "./api"
 import { supabase } from "./supabase"
 import { useSession } from "./session"
-import type { Order, Overview, Product } from "./types"
+import type { Order, OrderBoard, Overview, Product } from "./types"
 
 export const PAGE_SIZE = 20
 
@@ -32,6 +32,32 @@ export function useOrders(f: OrderFilter) {
         p_agent: f.agent || null,
         p_ascending: f.ascending,
       }),
+    enabled: !!store,
+    placeholderData: keepPreviousData,
+  })
+}
+
+export type BoardFilter = { stage: string; status: string; q: string; page: number; agent: string; ascending: boolean; size?: number }
+
+/** Orders board: rows with logistic stage and parcel, plus per-stage counters (RLS applies). */
+export function boardArgs(store: string | null, f: BoardFilter) {
+  return {
+    p_store: store,
+    p_stage: f.stage,
+    p_status: f.status,
+    p_query: f.q,
+    p_page: f.page,
+    p_size: f.size ?? PAGE_SIZE,
+    p_agent: f.agent || null,
+    p_ascending: f.ascending,
+  }
+}
+
+export function useOrderBoard(f: BoardFilter) {
+  const { store } = useSession()
+  return useQuery({
+    queryKey: ["store", store, "board", f],
+    queryFn: () => rpc<OrderBoard>("crm_order_board", boardArgs(store, f)),
     enabled: !!store,
     placeholderData: keepPreviousData,
   })

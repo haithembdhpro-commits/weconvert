@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { ArrowDownUp, Download, ExternalLink, Plus, RotateCcw, Search, Users, X } from "lucide-react"
+import { ArrowDownUp, Columns3, Download, ExternalLink, Inbox, PackageCheck, PackageOpen, PhoneCall, Plus, RotateCcw, Search, Truck, Undo2, Users, X, XCircle, type LucideIcon } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { CHANNELS, STATUS, csvCell } from "@domain/domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PageHeader, Pager } from "@/components/app/page"
-import { OrdersTable, useOrderUI } from "@/components/app/orders"
+import { ORDER_COLUMNS, OrdersTable, useOrderUI } from "@/components/app/orders"
 import { rpc, safeError, select } from "@/lib/api"
 import { f, orderCode, time } from "@/lib/format"
-import { useOrders, useOverview } from "@/lib/queries"
+import { boardArgs, useOrderBoard } from "@/lib/queries"
+import { ZR_STATES } from "@/lib/edge"
 import { navigate } from "@/lib/router"
 import { useSession } from "@/lib/session"
 import { supabase } from "@/lib/supabase"
-import type { Order } from "@/lib/types"
+import type { Order, OrderBoard, OrderStage } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 export function useDebounced<T>(value: T, ms = 350) {
   const [v, setV] = useState(value)
@@ -112,12 +114,38 @@ function YoucanAlerts() {
   )
 }
 
-const TAB_IDS = ["all", "new", "pending", "confirmed", "cancelled_all"]
+// Logistic stages (Confirmoo "New order → In preparation → Dispatched → Delivered | Returned").
+// Dispatched / delivered / returned come from the carrier parcel: a carrier state, not a cash collection.
+const STAGES: { id: "all" | OrderStage; label: string; hint: string; icon: LucideIcon }[] = [
+  { id: "all", label: "Toutes", hint: "Toutes les commandes", icon: Inbox },
+  { id: "new", label: "Nouvelles", hint: "À confirmer : nouvelle, appels, reportée, à vérifier", icon: PhoneCall },
+  { id: "preparing", label: "En préparation", hint: "Confirmées, pas encore remises au transporteur", icon: PackageOpen },
+  { id: "dispatched", label: "Expédiées", hint: "Colis chez le transporteur", icon: Truck },
+  { id: "delivered", label: "Livrées", hint: "Livré selon le transporteur (encaissement non vérifié)", icon: PackageCheck },
+  { id: "returned", label: "Retournées", hint: "Retour confirmé par le transporteur", icon: Undo2 },
+  { id: "closed", label: "Annulées", hint: "Annulées, doublons et faux numéros", icon: XCircle },
+]
+// Old links (#orders/pending, #orders/cancelled_all, #orders/confirmed) keep working.
+const ALIASES: Record<string, { stage: string; status: string }> = {
+  pending: { stage: "new", status: "all" },
+  cancelled_all: { stage: "closed", status: "all" },
+  confirmed: { stage: "all", status: "confirmed" },
+}
+const COLUMNS_KEY = "weconvert.orders.columns"
+function readColumns() {
+  try {
+    const v = JSON.parse(localStorage.getItem(COLUMNS_KEY) || "null")
+    if (Array.isArray(v)) return new Set<string>(v.filter((x) => ORDER_COLUMNS.some(([k]) => k === x)))
+  } catch {}
+  return new Set(ORDER_COLUMNS.map(([k]) => k))
+}
 
 export function Orders({ tab }: { tab: string }) {
   const s = useSession()
   const ui = useOrderUI()
-  const status = TAB_IDS.includes(tab) ? tab : "all"
+  const route = ALIASES[tab] || { stage: STAGES.some((x) => x.id === tab) ? tab : "all", status: "all" }
+  const stage = route.stage
+  const [status, setStatus] = useState(route.status)
   const [q, setQ] = useState("")
   const query = useDebounced(q)
   const [page, setPage] = useState(1)
@@ -125,19 +153,34 @@ export function Orders({ tab }: { tab: string }) {
   const [ascending, setAscending] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [exporting, setExporting] = useState(false)
-  const o = useOverview().data || {}
-  const list = useOrders({ status, q: query, page, agent, ascending })
+  const [columns, setColumns] = useState(readColumns)
+  const list = useOrderBoard({ stage, status, q: query, page, agent, ascending })
   const orders = list.data?.items || []
   const total = list.data?.total || 0
+  const counts = list.data?.stages || {}
+  const all = Object.values(counts).reduce((n, x) => n + (x || 0), 0)
 
+  // A legacy link sets a status filter; a stage card click clears it.
+  useEffect(() => setStatus(route.status), [tab]) // eslint-disable-line react-hooks/exhaustive-deps
   // Filters reset pagination and selection; live refreshes do not touch either.
   useEffect(() => {
     setPage(1)
     setSelected(new Set())
-  }, [status, query, agent, ascending, s.store])
+  }, [stage, status, query, agent, ascending, s.store])
   useEffect(() => {
     if (page > 1 && list.data && !orders.length && total > 0) setPage(Math.ceil(total / 20))
   }, [page, list.data, orders.length, total])
+
+  function toggleColumn(k: string, on: boolean) {
+    setColumns((prev) => {
+      const n = new Set(prev)
+      on ? n.add(k) : n.delete(k)
+      try {
+        localStorage.setItem(COLUMNS_KEY, JSON.stringify([...n]))
+      } catch {}
+      return n
+    })
+  }
 
   async function exportCsv() {
     setExporting(true)
@@ -147,18 +190,24 @@ export function Orders({ tab }: { tab: string }) {
       let p = 1
       let count = Infinity
       while (seen.size < count && p <= 1000) {
-        const data = await rpc<{ items: Order[]; total: number }>("crm_list_orders", {
-          p_store: s.store, p_status: status, p_query: query, p_page: p++, p_size: 100, p_agent: agent || null, p_ascending: ascending,
-        })
+        const data = await rpc<OrderBoard>("crm_order_board", boardArgs(s.store, { stage, status, q: query, page: p++, size: 100, agent, ascending }))
         count = data.total
         for (const x of data.items) if (!seen.has(x.id) && Date.parse(x.created_at) <= started) seen.set(x.id, x)
         if (!data.items.length) break
       }
       const rows = [...seen.values()]
-      const head = ["Commande", "Client", "Téléphone", "Wilaya", "Commune", "Adresse", "Canal", "Statut", "Agent", "Montant COD", "Créée le"]
+      const stageName = (x: Order) => STAGES.find((st) => st.id === x.stage)?.label || ""
+      const head = ["Commande", "Client", "Téléphone", "Wilaya", "Commune", "Adresse", "Canal", "Statut", "Étape", "Livraison (transporteur)", "Suivi", "Agent", "Montant COD", "Créée le"]
       const csv =
-        "﻿" +
-        [head, ...rows.map((x) => [orderCode(x), x.customer_name, x.phone, x.wilaya, x.commune, x.address, CHANNELS[x.channel], STATUS[x.status][0], s.memberName(x.assigned_to), x.total, new Date(x.created_at).toLocaleString("fr-FR", { timeZone: "Africa/Algiers" })])]
+        "\ufeff" +
+        [
+          head,
+          ...rows.map((x) => [
+            orderCode(x), x.customer_name, x.phone, x.wilaya, x.commune, x.address, CHANNELS[x.channel], STATUS[x.status][0], stageName(x),
+            x.shipment ? (ZR_STATES[x.shipment.state] || [x.shipment.state])[0] : "", x.shipment?.tracking || "", s.memberName(x.assigned_to), x.total,
+            new Date(x.created_at).toLocaleString("fr-FR", { timeZone: "Africa/Algiers" }),
+          ]),
+        ]
           .map((r) => r.map(csvCell).join(";"))
           .join("\r\n")
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
@@ -174,14 +223,6 @@ export function Orders({ tab }: { tab: string }) {
       setExporting(false)
     }
   }
-
-  const tabs: [string, string, number | undefined][] = [
-    ["all", "Toutes", o.all],
-    ["new", "Nouvelles", o.new],
-    ["pending", "En traitement", o.pending],
-    ["confirmed", "Statuts confirmés", o.confirmed],
-    ["cancelled_all", "Annulées", o.cancelled],
-  ]
 
   return (
     <>
@@ -202,23 +243,40 @@ export function Orders({ tab }: { tab: string }) {
         }
       />
       <YoucanAlerts />
-      <Tabs value={status} onValueChange={(v) => navigate("orders", v === "all" ? "" : v)} className="mb-4">
-        <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-          <TabsList>
-            {tabs.map(([id, label, n]) => (
-              <TabsTrigger key={id} value={id} className="px-3">
-                {label}
-                {n !== undefined && <span className="num ml-1 rounded-full bg-background/70 px-1.5 text-xs">{f(n)}</span>}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-      </Tabs>
+      <nav aria-label="Étapes des commandes" className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        {STAGES.map((x) => {
+          const n = x.id === "all" ? all : counts[x.id] || 0
+          const on = stage === x.id && status === "all"
+          return (
+            <button
+              key={x.id}
+              type="button"
+              title={x.hint}
+              aria-pressed={on}
+              onClick={() => {
+                setStatus("all")
+                navigate("orders", x.id === "all" ? "" : x.id)
+              }}
+              className={cn(
+                "flex min-h-16 items-center justify-between gap-2 rounded-xl border bg-card px-3.5 py-3 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+                on && "border-primary bg-accent shadow-[inset_0_-3px_0_var(--primary)]",
+              )}
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-muted-foreground">{x.label}</span>
+                <span className="num block text-xl font-semibold">{list.data ? f(n) : "…"}</span>
+              </span>
+              <x.icon className="size-[18px] shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+          )
+        })}
+      </nav>
+      <p className="mb-4 text-xs text-muted-foreground">Expédiées, livrées et retournées : statut du transporteur, pas un encaissement vérifié.</p>
       <Card className="gap-0 overflow-hidden py-0">
         <div className="flex flex-wrap items-center gap-2 border-b p-4">
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" aria-hidden />
-            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Client, téléphone, wilaya ou numéro…" aria-label="Rechercher" maxLength={200} className="pl-9" />
+            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Client, téléphone, wilaya, n° ou suivi…" aria-label="Rechercher" maxLength={200} className="pl-9" />
           </div>
           {s.manager && (
             <NativeSelect value={agent} onChange={(e) => setAgent(e.target.value)} aria-label="Filtrer par agent" wrapperClassName="w-full sm:w-56">
@@ -234,7 +292,34 @@ export function Orders({ tab }: { tab: string }) {
             <ArrowDownUp />
             {ascending ? "Anciennes d’abord" : "Récentes d’abord"}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="hidden md:inline-flex">
+                <Columns3 />
+                Colonnes
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>Colonnes affichées</DropdownMenuLabel>
+              {ORDER_COLUMNS.map(([k, label]) => (
+                <DropdownMenuCheckboxItem key={k} className="min-h-10" checked={columns.has(k)} onCheckedChange={(v) => toggleColumn(k, !!v)} onSelect={(e) => e.preventDefault()}>
+                  {label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+        {status !== "all" && (
+          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-sm">
+            <span>
+              Statut : <b>{STATUS[status]?.[0] || status}</b>
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => navigate("orders", "")}>
+              <X />
+              Retirer le filtre
+            </Button>
+          </div>
+        )}
         {selected.size > 0 && s.manager && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-accent px-4 py-2 text-sm">
             <span className="num font-medium">{selected.size} sélectionnée(s)</span>
@@ -261,6 +346,7 @@ export function Orders({ tab }: { tab: string }) {
         <OrdersTable
           orders={orders}
           selected={selected}
+          columns={columns}
           onToggle={(id, on) =>
             setSelected((prev) => {
               const n = new Set(prev)
