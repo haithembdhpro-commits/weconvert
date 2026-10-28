@@ -147,7 +147,7 @@ export function OrdersTable({
   const ui = useOrderUI()
   const selectable = !compact && s.manager && !!selected
   const allOn = selectable && orders.length > 0 && orders.every((o) => selected!.has(o.id))
-  const show = (k: string) => columns.has(k) && !(compact && (k === "agent" || k === "source"))
+  const show = (k: string) => columns.has(k) && !(compact && (k === "agent" || k === "source" || k === "product"))
   if (!orders.length) return <EmptyState title="Aucune commande" description="Ajoutez une commande ou adaptez votre recherche." />
   return (
     <>

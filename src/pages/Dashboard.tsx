@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, ArrowUpRight, CalendarClock, CheckCircle2, ChevronRight, MapPin, Phone, Plus, ShoppingBag, Truck } from "lucide-react"
+import { ArrowRight, ArrowUpRight, CalendarClock, CheckCircle2, ChevronRight, MapPin, Percent, Phone, Plus, ShoppingBag, Truck } from "lucide-react"
 import { algerToday, reportRange, reportRate } from "@domain/report-domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -67,7 +67,7 @@ function Kpi({
         <span className="grid size-9 place-items-center rounded-lg bg-secondary text-secondary-foreground">
           <Icon className="size-[18px]" aria-hidden />
         </span>
-        <h2 className="font-medium">{title}</h2>
+        <h2 className="leading-tight font-medium">{title}</h2>
         <a href={href} aria-label={"Ouvrir : " + title} className="ml-auto grid size-11 place-items-center rounded-lg text-muted-foreground outline-none after:absolute after:inset-0 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           <ArrowUpRight className="size-[18px]" aria-hidden />
         </a>
@@ -210,7 +210,7 @@ export function Dashboard() {
         </Kpi>
         <Kpi
           title="Taux de confirmation"
-          icon={ArrowUpRight}
+          icon={Percent}
           href="#performance"
           value={c ? reportRate(c.confirmed, base(c)) : "…"}
           delta={<Delta now={rate(c)} before={rate(p)} points />}

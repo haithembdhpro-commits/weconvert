@@ -15,24 +15,23 @@ function filled(v: number, max: number, rows: number) {
   return Math.min(rows, Math.max(1, Math.round((v / max) * rows)))
 }
 
-/** Small column sparkline: one column per value, dots filled from the bottom. */
+/** Small column sparkline: each value is a block of dot columns (denser when there are few values), filled from the bottom. */
 export function DotSpark({ values, label, className, rows = 7 }: { values: number[]; label: string; className?: string; rows?: number }) {
   const max = Math.max(0, ...values)
-  const w = values.length * GAP
+  const k = Math.max(1, Math.floor(16 / Math.max(1, values.length)))
+  const step = (k + (k > 1 ? 1 : 0)) * GAP
+  const w = Math.max(GAP, values.length * step - (k > 1 ? GAP : 0))
   const h = rows * GAP
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={label} className={cn("h-14 w-auto max-w-[45%] shrink-0", className)} preserveAspectRatio="xMaxYMax meet">
+    <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={label} className={cn("h-14 w-32 shrink-0", className)} preserveAspectRatio="xMaxYMax meet">
       {values.map((v, c) => {
         const n = filled(v, max, rows)
-        return Array.from({ length: rows }, (_, r) => (
-          <circle
-            key={c + "-" + r}
-            cx={c * GAP + GAP / 2}
-            cy={h - r * GAP - GAP / 2}
-            r={R}
-            className={r < n ? "fill-current" : "fill-muted-foreground/15"}
-          />
-        ))
+        return Array.from({ length: rows * k }, (_, i) => {
+          const r = Math.floor(i / k)
+          return (
+            <circle key={c + "-" + i} cx={c * step + (i % k) * GAP + GAP / 2} cy={h - r * GAP - GAP / 2} r={R} className={r < n ? "fill-current" : "fill-muted-foreground/15"} />
+          )
+        })
       })}
     </svg>
   )
