@@ -136,4 +136,18 @@ do $$declare sh uuid:=(select id from public.crm_shipments where reference='REF-
  assert (select attempt_errors=1 and last_error='ZR_AUTH' from public.crm_shipments where id=sh),'failure recorded';
 end $$;
 reset role;
+
+-- Invitation link: returned once live, never persisted in clear in the idempotency log.
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"50000000-0000-4000-8000-0000000000a1","role":"authenticated"}',true);
+do $$declare w uuid:=(select (v#>>'{}')::uuid from h where k='wa');rq uuid:=gen_random_uuid();x jsonb;y jsonb;begin
+ x:=public.crm_command(w,'member.invite','{"email":"invite-h@weconvert.invalid","display_name":"Invite H","role":"agent"}',rq);
+ assert length(x->>'token')=72,'live invite returns the one-time token';
+ y:=public.crm_command(w,'member.invite','{"email":"invite-h@weconvert.invalid","display_name":"Invite H","role":"agent"}',rq);
+ assert not (y ? 'token') and y ? 'expires_at','idempotent replay carries no token';
+end $$;
+reset role;
+do $$begin
+ assert not exists(select 1 from crm_private.requests where action='member.invite' and result ? 'token'),'no clear invitation token at rest';
+end $$;
 select 'Hardening checks passed' as verification;
