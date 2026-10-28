@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { ArrowDownUp, Columns3, Download, ExternalLink, Inbox, PackageCheck, PackageOpen, PhoneCall, Plus, RotateCcw, Search, Truck, Undo2, Users, X, XCircle, type LucideIcon } from "lucide-react"
+import { ArrowDownUp, Columns3, Download, ExternalLink, Inbox, PackageCheck, PackageOpen, PhoneCall, Plus, RotateCcw, Search, SlidersHorizontal, Truck, Undo2, Users, X, XCircle, type LucideIcon } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { CHANNELS, STATUS, csvCell } from "@domain/domain.mjs"
 import { Button } from "@/components/ui/button"
@@ -8,10 +8,11 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { PageHeader, Pager } from "@/components/app/page"
+import { FormField, PageHeader, Pager } from "@/components/app/page"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ORDER_COLUMNS, OrdersTable, useOrderUI } from "@/components/app/orders"
 import { rpc, safeError, select } from "@/lib/api"
-import { f, orderCode, time } from "@/lib/format"
+import { f, money, orderCode, time } from "@/lib/format"
 import { boardArgs, useOrderBoard } from "@/lib/queries"
 import { ZR_STATES } from "@/lib/edge"
 import { navigate } from "@/lib/router"
@@ -154,11 +155,15 @@ export function Orders({ tab }: { tab: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [exporting, setExporting] = useState(false)
   const [columns, setColumns] = useState(readColumns)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const list = useOrderBoard({ stage, status, q: query, page, agent, ascending })
   const orders = list.data?.items || []
   const total = list.data?.total || 0
   const counts = list.data?.stages || {}
   const all = Object.values(counts).reduce((n, x) => n + (x || 0), 0)
+  const activeFilters = (agent ? 1 : 0) + (ascending ? 1 : 0) + (status !== "all" ? 1 : 0)
+  const pageCod = orders.reduce((n, x) => n + (Number(x.total) || 0), 0)
+  const pageConfirmed = orders.filter((x) => x.stage === "preparing" || x.stage === "dispatched").length
 
   // A legacy link sets a status filter; a stage card click clears it.
   useEffect(() => setStatus(route.status), [tab]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -288,8 +293,13 @@ export function Orders({ tab }: { tab: string }) {
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Client, téléphone, wilaya, n° ou suivi…" aria-label="Rechercher" maxLength={200} className="pl-9" />
           </div>
+          <Button variant="outline" className="sm:hidden" onClick={() => setFiltersOpen(true)} aria-label={activeFilters ? `Filtres, ${activeFilters} actif${activeFilters > 1 ? "s" : ""}` : "Filtres"}>
+            <SlidersHorizontal />
+            Filtres
+            {activeFilters > 0 && <span className="num grid size-5 place-items-center rounded-full bg-primary text-xs text-primary-foreground">{activeFilters}</span>}
+          </Button>
           {s.manager && (
-            <NativeSelect value={agent} onChange={(e) => setAgent(e.target.value)} aria-label="Filtrer par agent" wrapperClassName="w-full sm:w-56">
+            <NativeSelect value={agent} onChange={(e) => setAgent(e.target.value)} aria-label="Filtrer par agent" wrapperClassName="hidden w-56 sm:block">
               <NativeSelectOption value="">Tous les agents</NativeSelectOption>
               {s.members.filter((m) => m.active).map((m) => (
                 <NativeSelectOption key={m.user_id} value={m.user_id}>
@@ -298,7 +308,7 @@ export function Orders({ tab }: { tab: string }) {
               ))}
             </NativeSelect>
           )}
-          <Button variant="outline" onClick={() => setAscending((a) => !a)} aria-pressed={ascending}>
+          <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setAscending((a) => !a)} aria-pressed={ascending}>
             <ArrowDownUp />
             {ascending ? "Anciennes d’abord" : "Récentes d’abord"}
           </Button>
@@ -346,8 +356,68 @@ export function Orders({ tab }: { tab: string }) {
           }
           onToggleAll={(on) => setSelected(on ? new Set(orders.map((x) => x.id)) : new Set())}
         />
+        {orders.length > 0 && (
+          <p className="num border-t px-4 py-2 text-xs text-muted-foreground">
+            Cette page : {f(orders.length)} commande{orders.length > 1 ? "s" : ""} · {money(pageCod)} de COD demandé (non encaissé)
+            {pageConfirmed > 0 ? " · " + f(pageConfirmed) + " en préparation ou expédiée" + (pageConfirmed > 1 ? "s" : "") : ""}
+          </p>
+        )}
         <Pager total={total} page={page} onPage={(p) => { setPage(Math.max(1, p)); setSelected(new Set()) }} />
       </Card>
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent side="bottom" className="max-h-[85dvh] gap-0 overflow-y-auto rounded-t-xl">
+          <SheetHeader className="border-b">
+            <SheetTitle>Filtres</SheetTitle>
+            <SheetDescription>{list.data ? f(total) + " résultat" + (total > 1 ? "s" : "") : "Chargement…"}</SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-5 p-4">
+            {s.manager && (
+              <FormField label="Agent" htmlFor="m-agent">
+                <NativeSelect id="m-agent" value={agent} onChange={(e) => setAgent(e.target.value)}>
+                  <NativeSelectOption value="">Tous les agents</NativeSelectOption>
+                  {s.members.filter((m) => m.active).map((m) => (
+                    <NativeSelectOption key={m.user_id} value={m.user_id}>
+                      {m.display_name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </FormField>
+            )}
+            <div role="radiogroup" aria-label="Ordre" className="grid gap-2">
+              <span className="text-sm font-medium">Ordre</span>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  [false, "Récentes d’abord"],
+                  [true, "Anciennes d’abord"],
+                ].map(([v, label]) => (
+                  <Button key={String(v)} role="radio" aria-checked={ascending === v} variant={ascending === v ? "secondary" : "outline"} onClick={() => setAscending(v as boolean)}>
+                    {label as string}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {status !== "all" && (
+              <p className="text-sm">
+                Statut : <b>{STATUS[status]?.[0] || status}</b>
+              </p>
+            )}
+          </div>
+          <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <Button
+              variant="outline"
+              disabled={!activeFilters}
+              onClick={() => {
+                setAgent("")
+                setAscending(false)
+                if (status !== "all") navigate("orders", stage === "all" ? "" : stage)
+              }}
+            >
+              Réinitialiser
+            </Button>
+            <Button onClick={() => setFiltersOpen(false)}>Voir {list.data ? f(total) : ""} résultat{total > 1 ? "s" : ""}</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
       {/* Floating bar: selecting rows never shifts the table under the pointer. */}
       {selected.size > 0 && s.manager && (
         <div role="region" aria-label="Actions sur la sélection" className="pointer-events-none fixed inset-x-0 bottom-20 z-30 flex justify-center px-4 lg:bottom-6 lg:pl-[272px]">

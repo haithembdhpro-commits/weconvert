@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useCallback, useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   Archive, BarChart3, Bolt, Box, ChevronDown, ChevronRight, LayoutGrid, Link2, LineChart, Menu, MessageSquare,
@@ -10,9 +10,11 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { BrandMark } from "@/components/app/tone"
 import { FormError } from "@/components/app/page"
+import { CommandMenu, useCommandShortcut } from "@/components/app/command-menu"
+import { Notifications } from "@/components/app/notifications"
 import { useOverview } from "@/lib/queries"
 import { useLiveSync, useOnline } from "@/lib/live"
-import { navigate, type RouteState } from "@/lib/router"
+import type { RouteState } from "@/lib/router"
 import { useSession } from "@/lib/session"
 import { useTheme } from "@/lib/theme"
 import { rpc, safeError } from "@/lib/api"
@@ -53,6 +55,8 @@ function NavLink({ item: [id, label, Icon], route, count, onNavigate, muted }: {
     </a>
   )
 }
+
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 
 const ROLE_LABEL = { owner: "Propriétaire", admin: "Administrateur", agent: "Agent de confirmation" } as const
 
@@ -264,6 +268,9 @@ export function AppShell({ route, children }: { route: RouteState; children: Rea
   const { theme, toggle } = useTheme()
   const live = useLiveSync()
   const [menu, setMenu] = useState(false)
+  const [search, setSearch] = useState(false)
+  const openSearch = useCallback(() => setSearch(true), [])
+  useCommandShortcut(openSearch)
   const me = s.members.find((m) => m.user_id === s.user?.id)
 
   return (
@@ -294,10 +301,15 @@ export function AppShell({ route, children }: { route: RouteState; children: Rea
             <b className="truncate font-semibold text-foreground">{TITLES[route.route]}</b>
           </nav>
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
-            <Button variant="outline" className="hidden text-muted-foreground md:inline-flex" onClick={() => navigate("orders")}>
+            <Button variant="outline" className="hidden min-w-64 justify-start text-muted-foreground md:inline-flex" onClick={openSearch} aria-keyshortcuts="Control+K Meta+K">
               <Search />
               Rechercher une commande
+              <kbd className="ml-auto rounded border bg-muted px-1.5 font-sans text-xs">{isMac ? "⌘K" : "Ctrl K"}</kbd>
             </Button>
+            <Button variant="ghost" size="icon" className="md:hidden" onClick={openSearch} aria-label="Rechercher une commande">
+              <Search />
+            </Button>
+            <Notifications />
             <LiveBadge state={live.state} />
             <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === "dark" ? "Passer en thème clair" : "Passer en thème sombre"}>
               {theme === "dark" ? <Sun /> : <Moon />}
@@ -308,6 +320,7 @@ export function AppShell({ route, children }: { route: RouteState; children: Rea
             <Avatar name={me?.display_name || s.user?.email || "?"} className="hidden sm:grid" />
           </div>
         </header>
+        <CommandMenu open={search} onOpenChange={setSearch} />
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 pb-28 outline-none sm:px-6 lg:px-8 lg:pb-10">
           {children}
         </main>

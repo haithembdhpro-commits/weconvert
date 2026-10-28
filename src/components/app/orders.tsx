@@ -10,6 +10,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, FormError, FormField, Loading, Notice } from "@/components/app/page"
 import { StatusBadge, ToneBadge } from "@/components/app/tone"
@@ -249,7 +250,7 @@ export function OrdersTable({
     {/* Phones: one card per order, the agent's main format. */}
     <ul className="divide-y md:hidden">
       {orders.map((o) => (
-        <li key={o.id} className="flex items-start gap-3 px-4 py-3">
+        <li key={o.id} className={cn("flex items-start gap-3 px-4 py-3", ui.openId === o.id && "bg-accent")}>
           {selectable && (
             <label className="-m-3 grid size-11 shrink-0 place-items-center">
               <Checkbox checked={selected!.has(o.id)} onCheckedChange={(v) => onToggle?.(o.id, !!v)} aria-label={"Sélectionner " + orderCode(o)} className="size-5" />
@@ -305,7 +306,7 @@ export function OrdersTable({
         </TableHeader>
         <TableBody>
           {orders.map((o) => (
-            <TableRow key={o.id} className="cursor-pointer" onClick={() => ui.openOrder(o.id)}>
+            <TableRow key={o.id} className="cursor-pointer data-[open=true]:bg-accent" data-open={ui.openId === o.id} aria-current={ui.openId === o.id ? "true" : undefined} onClick={() => ui.openOrder(o.id)}>
               {selectable && (
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Checkbox checked={selected!.has(o.id)} onCheckedChange={(v) => onToggle?.(o.id, !!v)} aria-label={"Sélectionner " + orderCode(o)} className="size-5" />
@@ -398,6 +399,8 @@ type Ui = {
   noAnswer: (o: Order, attempt?: number) => Promise<boolean>
   /** Orders whose confirmation is waiting for the undo delay. */
   queued: Set<string>
+  /** Order shown in the side panel (highlighted in lists). */
+  openId: string | null
 }
 
 /** Delay during which a confirmation can be undone from its toast before it is sent. */
@@ -555,8 +558,9 @@ export function OrderUIProvider({ children, onAssigned }: { children: ReactNode;
         }
       },
       queued,
+      openId: detail,
     }),
-    [mutate, confirmWithUndo, queued],
+    [mutate, confirmWithUndo, queued, detail],
   )
 
   const reasonTitle = (r: { order: Order; status: string }) =>
@@ -1134,12 +1138,18 @@ function OrderDetailDialog({ id, onClose }: { id: string | null; onClose: () => 
   const q = useOrderDetail(id)
   const o = q.data
   return (
-    <Dialog open={!!id} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{o ? "Commande #" + orderCode(o) : "Commande"}</DialogTitle>
-          <DialogDescription>{o ? CHANNELS[o.channel] + " · créée le " + time(o.created_at) : "Chargement…"}</DialogDescription>
-        </DialogHeader>
+    // Side panel, non-modal: the list stays visible and usable; clicking another row switches the panel to it.
+    <Sheet open={!!id} onOpenChange={(open) => !open && onClose()} modal={false}>
+      <SheetContent
+        side="right"
+        className="w-full gap-0 overflow-y-auto border-l shadow-2xl sm:max-w-xl"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <SheetHeader className="sticky top-0 z-10 border-b bg-background/95 pr-14 backdrop-blur">
+          <SheetTitle>{o ? "Commande #" + orderCode(o) : "Commande"}</SheetTitle>
+          <SheetDescription>{o ? CHANNELS[o.channel] + " · créée le " + time(o.created_at) : "Chargement…"}</SheetDescription>
+        </SheetHeader>
+        <div className="p-4 sm:p-6">
         {q.isError ? (
           <FormError message={safeError(q.error)} />
         ) : !o ? (
@@ -1185,17 +1195,13 @@ function OrderDetailDialog({ id, onClose }: { id: string | null; onClose: () => 
               <b className="num text-xl">{money(o.total)}</b>
             </div>
             <SourcePanels o={o} />
-            <NoteForm o={o} />
+            <NoteForm o={o} key={o.id} />
             <OrderHistory o={o} />
           </div>
         )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Fermer
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 

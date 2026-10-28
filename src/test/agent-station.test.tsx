@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
+import { useCommandShortcut } from "@/components/app/command-menu"
 import { ContactActions, waLink } from "@/components/app/orders"
 import { WILAYAS } from "@/lib/wilayas"
 
@@ -26,5 +27,22 @@ describe("wilayas", () => {
     expect(WILAYAS[68].value).toBe("69 - El Abiodh Sidi Cheikh")
     // Same extraction as the ZR shipping dialog.
     for (const w of WILAYAS) expect(Number((w.value.match(/^\s*(\d{1,2})(?:\s|[-–.])/) || [])[1])).toBe(w.code)
+  })
+})
+
+function ShortcutProbe({ onOpen }: { onOpen: () => void }) {
+  useCommandShortcut(onOpen)
+  return null
+}
+
+describe("command shortcut", () => {
+  it("opens on Ctrl+K and ⌘K, not on a plain k", () => {
+    let n = 0
+    render(<ShortcutProbe onOpen={() => n++} />)
+    fireEvent.keyDown(window, { key: "k" })
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true })
+    fireEvent.keyDown(window, { key: "K", metaKey: true })
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true, shiftKey: true })
+    expect(n).toBe(2)
   })
 })
