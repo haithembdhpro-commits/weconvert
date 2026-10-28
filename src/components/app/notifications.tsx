@@ -79,9 +79,9 @@ export function Notifications() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[min(400px,calc(100vw-2rem))] p-0">
-        <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
-          <p className="text-sm font-semibold">Notifications</p>
-          <Button variant="ghost" size="sm" disabled={!unread} onClick={markAll}>
+        <div className="flex items-center justify-between gap-2 border-b py-2 pr-2 pl-3">
+          <p className="min-w-0 truncate text-sm font-semibold">Notifications</p>
+          <Button variant="ghost" size="sm" className="shrink-0" disabled={!unread} onClick={markAll}>
             Tout marquer comme lu
           </Button>
         </div>
