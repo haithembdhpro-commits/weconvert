@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Check, ChevronDown, ChevronRight, Clock, Pencil, Plus, Search, Users, X } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Clock, Copy, MessageCircle, MoreHorizontal, Pencil, Phone, Plus, RotateCcw, Search, Users, X } from "lucide-react"
 import { CHANNELS, PENDING, STATUS, initialsOf, localInputToISO, orderAmount } from "@domain/domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -19,6 +19,73 @@ import { f, money, orderCode, shortDate, time } from "@/lib/format"
 import { searchProducts, useOrderDetail } from "@/lib/queries"
 import { useSession } from "@/lib/session"
 import type { Order, OrderEvent, Product } from "@/lib/types"
+import { cn } from "@/lib/utils"
+import { WILAYAS } from "@/lib/wilayas"
+
+/* ---------------------------------------------------------------- contact */
+
+/** wa.me expects the international number without "+" ; local 05/06/07 numbers become 213… */
+export function waLink(phone: string) {
+  let d = (phone || "").replace(/\D/g, "")
+  if (/^0[567]\d{8}$/.test(d)) d = "213" + d.slice(1)
+  return "https://wa.me/" + d
+}
+
+/**
+ * Call, WhatsApp and copy for a customer phone. `full` shows labelled buttons (call sheet, order card);
+ * otherwise compact icon buttons (lists). Clicks never open the row behind.
+ */
+export function ContactActions({ phone, full = false, className }: { phone: string; full?: boolean; className?: string }) {
+  if (!phone) return null
+  const stop = (e: React.MouseEvent) => e.stopPropagation()
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(phone)
+      toast.success("Numéro copié : " + phone)
+    } catch {
+      toast.error("Copie impossible : sélectionnez le numéro à la main.")
+    }
+  }
+  if (full)
+    return (
+      <div className={cn("flex flex-wrap gap-2", className)}>
+        <Button asChild>
+          <a href={"tel:" + phone} onClick={stop}>
+            <Phone />
+            Appeler
+          </a>
+        </Button>
+        <Button variant="outline" asChild>
+          <a href={waLink(phone)} target="_blank" rel="noopener noreferrer" onClick={stop}>
+            <MessageCircle />
+            WhatsApp
+          </a>
+        </Button>
+        <Button variant="outline" onClick={copy}>
+          <Copy />
+          Copier
+        </Button>
+      </div>
+    )
+  return (
+    <span className={cn("inline-flex gap-0.5", className)}>
+      <Button variant="ghost" size="icon-sm" asChild>
+        <a href={"tel:" + phone} onClick={stop} aria-label={"Appeler le " + phone} title="Appeler">
+          <Phone />
+        </a>
+      </Button>
+      <Button variant="ghost" size="icon-sm" asChild>
+        <a href={waLink(phone)} target="_blank" rel="noopener noreferrer" onClick={stop} aria-label={"Écrire sur WhatsApp au " + phone} title="WhatsApp">
+          <MessageCircle />
+        </a>
+      </Button>
+      <Button variant="ghost" size="icon-sm" onClick={copy} aria-label={"Copier le " + phone} title="Copier le numéro">
+        <Copy />
+      </Button>
+    </span>
+  )
+}
 
 /* ------------------------------------------------------------------ table */
 
@@ -65,6 +132,7 @@ export function StatusMenu({ o }: { o: Order }) {
   const shipped = !!o.shipment && o.shipment.state !== "cancelled"
   const canReopen = s.manager && !pending && !shipped
   const canCancel = s.manager && o.status === "confirmed" && !shipped
+  if (ui.queued.has(o.id)) return <ToneBadge tone="success">Confirmée · envoi…</ToneBadge>
   if (!pending && !canReopen && !canCancel) return <StatusBadge status={o.status} />
   return (
     <DropdownMenu>
@@ -106,19 +174,20 @@ export function StatusMenu({ o }: { o: Order }) {
               Doublon…
             </DropdownMenuItem>
             <DropdownMenuItem className="min-h-8 coarse:min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
-              Annulée…
+              Annuler la commande…
             </DropdownMenuItem>
           </>
         ) : (
           <>
+            <DropdownMenuLabel>Statut actuel : {STATUS[o.status]?.[0] || o.status}</DropdownMenuLabel>
             {canReopen && (
               <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.setStatus(o, "new")}>
-                Rouvrir (Nouvelle)…
+                Rouvrir la commande…
               </DropdownMenuItem>
             )}
             {canCancel && (
               <DropdownMenuItem className="min-h-8 coarse:min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>
-                Annulée…
+                Annuler la commande…
               </DropdownMenuItem>
             )}
           </>
@@ -135,6 +204,9 @@ export function OrdersTable({
   onToggle,
   onToggleAll,
   columns = ALL_COLUMNS,
+  loading = false,
+  error,
+  onRetry,
 }: {
   orders: Order[]
   compact?: boolean
@@ -142,12 +214,32 @@ export function OrdersTable({
   onToggle?: (id: string, on: boolean) => void
   onToggleAll?: (on: boolean) => void
   columns?: Set<string>
+  /** First load in progress: never show "no order" before the server answered. */
+  loading?: boolean
+  error?: unknown
+  onRetry?: () => void
 }) {
   const s = useSession()
   const ui = useOrderUI()
   const selectable = !compact && s.manager && !!selected
+  const someOn = selectable && orders.some((o) => selected!.has(o.id))
   const allOn = selectable && orders.length > 0 && orders.every((o) => selected!.has(o.id))
-  const show = (k: string) => columns.has(k) && !(compact && (k === "agent" || k === "source" || k === "product"))
+  const show = (k: string) => columns.has(k) && !(compact && (k === "agent" || k === "source" || k === "product" || k === "wilaya"))
+  if (error && !orders.length)
+    return (
+      <div className="grid justify-items-start gap-3 p-5">
+        <Notice tone="danger" role="alert">
+          Liste indisponible : {safeError(error)}
+        </Notice>
+        {onRetry && (
+          <Button variant="outline" onClick={onRetry}>
+            <RotateCcw />
+            Réessayer
+          </Button>
+        )}
+      </div>
+    )
+  if (loading && !orders.length) return <Loading text="Chargement des commandes…" />
   if (!orders.length) return <EmptyState title="Aucune commande" description="Ajoutez une commande ou adaptez votre recherche." />
   return (
     <>
@@ -156,9 +248,12 @@ export function OrdersTable({
       {orders.map((o) => (
         <li key={o.id} className="flex items-start gap-3 px-4 py-3">
           {selectable && (
-            <Checkbox checked={selected!.has(o.id)} onCheckedChange={(v) => onToggle?.(o.id, !!v)} aria-label={"Sélectionner " + orderCode(o)} className="mt-1 size-5" />
+            <label className="-m-3 grid size-11 shrink-0 place-items-center">
+              <Checkbox checked={selected!.has(o.id)} onCheckedChange={(v) => onToggle?.(o.id, !!v)} aria-label={"Sélectionner " + orderCode(o)} className="size-5" />
+            </label>
           )}
-          <button type="button" onClick={() => ui.openOrder(o.id)} className="grid min-w-0 flex-1 gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <div className="grid min-w-0 flex-1 gap-1">
+          <button type="button" onClick={() => ui.openOrder(o.id)} className="grid min-w-0 gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <span className="num text-sm font-semibold text-primary">#{orderCode(o)}</span>
             <span className="flex items-baseline justify-between gap-2">
               <span className="truncate font-medium">{o.customer_name}</span>
@@ -173,6 +268,8 @@ export function OrdersTable({
               <span className="text-xs text-muted-foreground">{o.woo_attention ? "WooCommerce à vérifier" : "Statut Woo non vérifié"}</span>
             )}
           </button>
+          <ContactActions phone={o.phone} className="-ml-2" />
+          </div>
           <div className="shrink-0">
             <StatusMenu o={o} />
           </div>
@@ -185,7 +282,7 @@ export function OrdersTable({
           <TableRow className="bg-muted/60 hover:bg-muted/60">
             {selectable && (
               <TableHead className="w-11">
-                <Checkbox checked={allOn} onCheckedChange={(v) => onToggleAll?.(!!v)} aria-label="Sélectionner la page" className="size-5" />
+                <Checkbox checked={allOn ? true : someOn ? "indeterminate" : false} onCheckedChange={(v) => onToggleAll?.(!!v && !someOn)} aria-label="Sélectionner la page" className="size-5" />
               </TableHead>
             )}
             <TableHead>N° commande</TableHead>
@@ -233,6 +330,7 @@ export function OrdersTable({
                     <span className="block font-medium">{o.customer_name}</span>
                     <span className="num block text-xs text-muted-foreground">{o.phone}</span>
                   </span>
+                  {!compact && <ContactActions phone={o.phone} className="ml-auto" />}
                 </div>
               </TableCell>
               {show("product") && (
@@ -288,10 +386,17 @@ type Ui = {
   newOrder: () => void
   editOrder: (id: string) => void
   assign: (ids: { id: string; version: number }[], current?: string | null) => void
-  callback: (o: Order) => void
-  setStatus: (o: Order, status: string) => Promise<void>
-  noAnswer: (o: Order, attempt?: number) => Promise<void>
+  /** Resolves true once the callback is saved, false if the dialog was closed. */
+  callback: (o: Order) => Promise<boolean>
+  /** Resolves true when the change is accepted (a confirmation is queued for UNDO_MS, then sent), false otherwise. */
+  setStatus: (o: Order, status: string) => Promise<boolean>
+  noAnswer: (o: Order, attempt?: number) => Promise<boolean>
+  /** Orders whose confirmation is waiting for the undo delay. */
+  queued: Set<string>
 }
+
+/** Delay during which a confirmation can be undone from its toast before it is sent. */
+const UNDO_MS = 5000
 const UiCtx = createContext<Ui | null>(null)
 export const useOrderUI = () => {
   const c = useContext(UiCtx)
@@ -310,16 +415,89 @@ export function OrderUIProvider({ children, onAssigned }: { children: ReactNode;
   const [callbackFor, setCallbackFor] = useState<Order | null>(null)
   const [assignFor, setAssignFor] = useState<{ ids: { id: string; version: number }[]; current?: string | null } | null>(null)
   const busy = useRef(false)
+  // Resolves the promise of the reason / callback dialog currently open.
+  const settle = useRef<((ok: boolean) => void) | null>(null)
+  const finish = (ok: boolean) => {
+    settle.current?.(ok)
+    settle.current = null
+  }
+  const [queued, setQueued] = useState<Set<string>>(new Set())
+  const pendingSends = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; send: () => Promise<void> }>())
 
   const refresh = useCallback(() => qc.invalidateQueries({ queryKey: ["store", s.store] }), [qc, s.store])
 
   const mutate = useCallback(
-    async (action: string, payload: Record<string, unknown>) => {
+    async (action: string, payload: Record<string, unknown>, done: string) => {
       await s.command(action, payload)
-      toast.success("Modification enregistrée.")
+      toast.success(done)
       await refresh()
     },
     [s, refresh],
+  )
+
+  const unqueue = useCallback((id: string) => {
+    pendingSends.current.delete(id)
+    setQueued((prev) => {
+      const n = new Set(prev)
+      n.delete(id)
+      return n
+    })
+  }, [])
+
+  // A queued confirmation is never lost: it is sent at once when the tab is hidden or the provider unmounts
+  // (store switch, logout), and closing the tab while one is waiting asks the browser to confirm.
+  useEffect(() => {
+    const flush = () => pendingSends.current.forEach((p) => p.send())
+    const onHide = () => document.visibilityState === "hidden" && flush()
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (!pendingSends.current.size) return
+      flush()
+      e.preventDefault()
+    }
+    document.addEventListener("visibilitychange", onHide)
+    window.addEventListener("beforeunload", onUnload)
+    return () => {
+      document.removeEventListener("visibilitychange", onHide)
+      window.removeEventListener("beforeunload", onUnload)
+      flush()
+    }
+  }, [])
+
+  const confirmWithUndo = useCallback(
+    (o: Order) => {
+      if (pendingSends.current.has(o.id)) return
+      const code = "#" + orderCode(o)
+      const send = async () => {
+        const p = pendingSends.current.get(o.id)
+        if (!p) return
+        clearTimeout(p.timer)
+        unqueue(o.id)
+        try {
+          await s.command("order.status", { id: o.id, version: o.version, status: "confirmed" })
+        } catch (e) {
+          toast.error(code + " n’a pas été confirmée : " + safeError(e))
+        } finally {
+          await refresh()
+        }
+      }
+      pendingSends.current.set(o.id, { timer: setTimeout(send, UNDO_MS), send })
+      setQueued((prev) => new Set(prev).add(o.id))
+      toast.success(code + " confirmée", {
+        description: o.customer_name + " · " + money(o.total),
+        duration: UNDO_MS,
+        action: {
+          label: "Annuler",
+          onClick: () => {
+            const p = pendingSends.current.get(o.id)
+            if (!p) return
+            clearTimeout(p.timer)
+            unqueue(o.id)
+            toast(code + " : confirmation annulée.")
+          },
+        },
+      })
+    },
+    [s, refresh, unqueue],
   )
 
   const ui = useMemo<Ui>(
@@ -328,33 +506,56 @@ export function OrderUIProvider({ children, onAssigned }: { children: ReactNode;
       newOrder: () => setForm({ id: null }),
       editOrder: (id) => setForm({ id }),
       assign: (ids, current) => setAssignFor({ ids, current }),
-      callback: (o) => setCallbackFor(o),
+      callback: (o) =>
+        new Promise<boolean>((resolve) => {
+          finish(false)
+          settle.current = resolve
+          setCallbackFor(o)
+        }),
       setStatus: async (o, status) => {
-        if (REASON_STATUSES.includes(status)) return setReason({ order: o, status })
-        if (busy.current) return
+        if (REASON_STATUSES.includes(status))
+          return new Promise<boolean>((resolve) => {
+            finish(false)
+            settle.current = resolve
+            setReason({ order: o, status })
+          })
+        if (status === "confirmed") {
+          confirmWithUndo(o)
+          return true
+        }
+        if (busy.current) return false
         busy.current = true
         try {
-          await mutate("order.status", { id: o.id, version: o.version, status })
+          await mutate("order.status", { id: o.id, version: o.version, status }, "#" + orderCode(o) + " : " + (STATUS[status]?.[0] || status) + ".")
+          return true
         } catch (e) {
           toast.error(safeError(e))
+          return false
         } finally {
           busy.current = false
         }
       },
       noAnswer: async (o, attempt) => {
-        if (busy.current) return
+        if (busy.current) return false
         busy.current = true
         try {
-          await mutate("order.call", attempt ? { id: o.id, version: o.version, attempt } : { id: o.id, version: o.version })
+          const n = attempt || o.attempts + 1
+          await mutate("order.call", attempt ? { id: o.id, version: o.version, attempt } : { id: o.id, version: o.version }, "#" + orderCode(o) + " : appel " + n + " sans réponse.")
+          return true
         } catch (e) {
           toast.error(safeError(e))
+          return false
         } finally {
           busy.current = false
         }
       },
+      queued,
     }),
-    [mutate],
+    [mutate, confirmWithUndo, queued],
   )
+
+  const reasonTitle = (r: { order: Order; status: string }) =>
+    ({ new: "Rouvrir la commande", cancelled: "Annuler la commande", duplicate: "Marquer comme doublon", fake: "Marquer comme faux numéro" })[r.status] + " #" + orderCode(r.order)
 
   return (
     <UiCtx.Provider value={ui}>
@@ -363,15 +564,41 @@ export function OrderUIProvider({ children, onAssigned }: { children: ReactNode;
       {form && <OrderFormDialog id={form.id} onClose={() => setForm(null)} />}
       {reason && (
         <ReasonDialog
-          title={STATUS[reason.status][0]}
-          onClose={() => setReason(null)}
-          onSubmit={(text) => mutate("order.status", { id: reason.order.id, version: reason.order.version, status: reason.status, reason: text }).then(() => setReason(null))}
+          title={reasonTitle(reason)}
+          status={reason.status}
+          destructive={reason.status !== "new"}
+          onClose={() => {
+            setReason(null)
+            finish(false)
+          }}
+          onSubmit={(text) =>
+            mutate(
+              "order.status",
+              { id: reason.order.id, version: reason.order.version, status: reason.status, reason: text },
+              "#" + orderCode(reason.order) + " : " + (STATUS[reason.status]?.[0] || reason.status) + ".",
+            ).then(() => {
+              setReason(null)
+              finish(true)
+            })
+          }
         />
       )}
       {callbackFor && (
         <CallbackDialog
-          onClose={() => setCallbackFor(null)}
-          onSubmit={(at, note) => mutate("order.callback", { id: callbackFor.id, version: callbackFor.version, callback_at: localInputToISO(at), note }).then(() => setCallbackFor(null))}
+          onClose={() => {
+            setCallbackFor(null)
+            finish(false)
+          }}
+          onSubmit={(at, note) =>
+            mutate(
+              "order.callback",
+              { id: callbackFor.id, version: callbackFor.version, callback_at: localInputToISO(at), note },
+              "#" + orderCode(callbackFor) + " : rappel prévu le " + time(localInputToISO(at)) + ".",
+            ).then(() => {
+              setCallbackFor(null)
+              finish(true)
+            })
+          }
         />
       )}
       {assignFor && (
@@ -395,8 +622,8 @@ export function OrderUIProvider({ children, onAssigned }: { children: ReactNode;
             setAssignFor(null)
             onAssigned?.(ok)
             await refresh()
-            toast.success(done + " commande(s) affectée(s).")
-            if (failures.length) toast.error(failures.length + " échec(s). " + safeError(failures[0]))
+            if (done) toast.success(done > 1 ? done + " commandes affectées." : "Commande affectée.")
+            if (failures.length) toast.error((failures.length > 1 ? failures.length + " commandes refusées : " : "Commande refusée : ") + safeError(failures[0]))
           }}
         />
       )}
@@ -424,8 +651,19 @@ function useSubmit() {
   return { error, busy, run }
 }
 
-function ReasonDialog({ title, onClose, onSubmit }: { title: string; onClose: () => void; onSubmit: (reason: string) => Promise<unknown> }) {
+const REASON_PRESETS: Record<string, string[]> = {
+  cancelled: ["Client a refusé la commande", "Prix trop élevé", "Délai de livraison trop long", "A déjà commandé ailleurs", "Commande passée par erreur"],
+  fake: ["Numéro inexistant ou hors service", "Numéro d’une autre personne", "Le client nie avoir commandé"],
+  duplicate: ["Même client, même produit", "Commande déjà confirmée sous un autre numéro"],
+  new: ["Le client a rappelé", "Statut choisi par erreur"],
+}
+
+function ReasonDialog({
+  title, status, destructive, onClose, onSubmit,
+}: { title: string; status: string; destructive?: boolean; onClose: () => void; onSubmit: (reason: string) => Promise<unknown> }) {
   const { error, busy, run } = useSubmit()
+  const [text, setText] = useState("")
+  const presets = REASON_PRESETS[status] || []
   return (
     <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent>
@@ -438,21 +676,29 @@ function ReasonDialog({ title, onClose, onSubmit }: { title: string; onClose: ()
           className="grid gap-4"
           onSubmit={(e) => {
             e.preventDefault()
-            const reason = String(new FormData(e.currentTarget).get("reason") || "")
-            run(() => onSubmit(reason))
+            run(() => onSubmit(text.trim()))
           }}
         >
-          <FormField label="Motif" htmlFor="reason" required>
-            <Textarea id="reason" name="reason" required minLength={2} maxLength={2000} rows={3} />
+          {presets.length > 0 && (
+            <div role="group" aria-label="Motifs fréquents" className="flex flex-wrap gap-2">
+              {presets.map((p) => (
+                <Button key={p} type="button" size="sm" variant={text === p ? "secondary" : "outline"} aria-pressed={text === p} onClick={() => setText(p)}>
+                  {p}
+                </Button>
+              ))}
+            </div>
+          )}
+          <FormField label="Motif" htmlFor="reason" required hint="Choisissez un motif fréquent ou précisez-le.">
+            <Textarea id="reason" name="reason" required minLength={2} maxLength={2000} rows={2} value={text} onChange={(e) => setText(e.target.value)} />
           </FormField>
           <FormError message={error} />
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>
-            Annuler
+            Retour
           </Button>
-          <Button type="submit" form="reason-form" disabled={busy}>
-            Enregistrer le statut
+          <Button type="submit" form="reason-form" variant={destructive ? "destructive" : "default"} disabled={busy || text.trim().length < 2} aria-busy={busy}>
+            {title.split(" #")[0]}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -460,14 +706,36 @@ function ReasonDialog({ title, onClose, onSubmit }: { title: string; onClose: ()
   )
 }
 
+/** "YYYY-MM-DDTHH:mm" in the device time zone, for datetime-local inputs. */
+function localInput(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+function callbackShortcuts(now = new Date()) {
+  const inHour = new Date(now.getTime() + 60 * 60 * 1000)
+  const evening = new Date(now)
+  evening.setHours(18, 0, 0, 0)
+  const tomorrow = new Date(now)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(10, 0, 0, 0)
+  return [
+    ["Dans 1 h", inHour],
+    ...(evening.getTime() - now.getTime() > 30 * 60 * 1000 ? [["Ce soir 18:00", evening] as [string, Date]] : []),
+    ["Demain 10:00", tomorrow],
+  ] as [string, Date][]
+}
+
 function CallbackDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit: (at: string, note: string) => Promise<unknown> }) {
   const { error, busy, run } = useSubmit()
+  const [at, setAt] = useState("")
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   return (
     <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Planifier un rappel</DialogTitle>
-          <DialogDescription>Heure de votre appareil : {Intl.DateTimeFormat().resolvedOptions().timeZone}.</DialogDescription>
+          <DialogDescription>{tz === "Africa/Algiers" ? "Heure d’Alger." : "Heure de votre appareil (" + tz + ")."}</DialogDescription>
         </DialogHeader>
         <form
           id="callback-form"
@@ -475,22 +743,32 @@ function CallbackDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit: 
           onSubmit={(e) => {
             e.preventDefault()
             const d = new FormData(e.currentTarget)
-            run(() => onSubmit(String(d.get("callback_at")), String(d.get("note") || "")))
+            run(() => onSubmit(at, String(d.get("note") || "")))
           }}
         >
+          <div role="group" aria-label="Raccourcis" className="flex flex-wrap gap-2">
+            {callbackShortcuts().map(([label, d]) => {
+              const v = localInput(d)
+              return (
+                <Button key={label} type="button" size="sm" variant={at === v ? "secondary" : "outline"} aria-pressed={at === v} onClick={() => setAt(v)}>
+                  {label}
+                </Button>
+              )
+            })}
+          </div>
           <FormField label="Date et heure du rappel" htmlFor="cb-at" required>
-            <Input id="cb-at" name="callback_at" type="datetime-local" required />
+            <Input id="cb-at" name="callback_at" type="datetime-local" required min={localInput(new Date())} value={at} onChange={(e) => setAt(e.target.value)} />
           </FormField>
           <FormField label="Note" htmlFor="cb-note">
-            <Input id="cb-note" name="note" maxLength={2000} />
+            <Input id="cb-note" name="note" maxLength={2000} placeholder="Disponible après 17 h, rappeler au travail…" />
           </FormField>
           <FormError message={error} />
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>
-            Annuler
+            Retour
           </Button>
-          <Button type="submit" form="callback-form" disabled={busy}>
+          <Button type="submit" form="callback-form" disabled={busy || !at} aria-busy={busy}>
             Planifier
           </Button>
         </DialogFooter>
@@ -574,64 +852,90 @@ export function ItemsSummary({ o }: { o: Order }) {
   )
 }
 
-export function OrderActions({ o }: { o: Order }) {
+/**
+ * Order actions, most frequent first: Confirmer · Sans réponse · Rappel, the rest under "Autres".
+ * `onDone` fires after an accepted action (the call sheet uses it to move to the next order).
+ */
+export function OrderActions({ o, onDone, className }: { o: Order; onDone?: () => void; className?: string }) {
   const s = useSession()
   const ui = useOrderUI()
   const pending = PENDING.includes(o.status)
-  if (!pending && !s.manager) return null
-  return (
-    <div className="flex flex-wrap gap-2">
-      {pending ? (
-        <>
-          <Button onClick={() => ui.setStatus(o, "confirmed")}>
-            <Check />
-            Confirmer
-          </Button>
-          <Button variant="outline" onClick={() => ui.callback(o)}>
-            <Clock />
-            Planifier un rappel
-          </Button>
-          <Button variant="outline" onClick={() => ui.noAnswer(o)}>
-            Sans réponse
-          </Button>
-          <Button variant="outline" onClick={() => ui.editOrder(o.id)}>
-            <Pencil />
-            Modifier
-          </Button>
-          <Button variant="outline" onClick={() => ui.setStatus(o, "check")} disabled={o.status === "check"}>
-            À vérifier
-          </Button>
-          <Button variant="outline" onClick={() => ui.setStatus(o, "fake")}>
-            Faux numéro
-          </Button>
-          <Button variant="outline" onClick={() => ui.setStatus(o, "duplicate")}>
-            Doublon
-          </Button>
-          <Button variant="destructive" onClick={() => ui.setStatus(o, "cancelled")}>
-            Annuler
-          </Button>
-        </>
-      ) : (
-        <>
-          <Button variant="outline" onClick={() => ui.setStatus(o, "new")}>
-            Rouvrir la commande
-          </Button>
-          {o.status === "confirmed" && (
-            <Button variant="destructive" onClick={() => ui.setStatus(o, "cancelled")}>
-              Annuler
+  const shipped = !!o.shipment && o.shipment.state !== "cancelled"
+  const after = (p: Promise<boolean>) => p.then((ok) => ok && onDone?.())
+  if (ui.queued.has(o.id))
+    return <p className={cn("text-sm text-muted-foreground", className)}>Confirmation en cours d’envoi… (annulable depuis la notification)</p>
+  if (pending)
+    return (
+      <div className={cn("flex flex-wrap gap-2", className)}>
+        <Button onClick={() => after(ui.setStatus(o, "confirmed"))}>
+          <Check />
+          Confirmer
+        </Button>
+        <Button variant="outline" onClick={() => after(ui.noAnswer(o))}>
+          Sans réponse{o.attempts ? " (appel " + (o.attempts + 1) + ")" : ""}
+        </Button>
+        <Button variant="outline" onClick={() => after(ui.callback(o))}>
+          <Clock />
+          Rappel…
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost">
+              <MoreHorizontal />
+              Autres
             </Button>
-          )}
-        </>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.editOrder(o.id)}>
+              <Pencil />
+              Modifier la commande
+            </DropdownMenuItem>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" disabled={o.status === "check"} onSelect={() => after(ui.setStatus(o, "check"))}>
+              À vérifier
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => after(ui.setStatus(o, "fake"))}>
+              Faux numéro…
+            </DropdownMenuItem>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => after(ui.setStatus(o, "duplicate"))}>
+              Doublon…
+            </DropdownMenuItem>
+            <DropdownMenuItem className="min-h-8 coarse:min-h-10" variant="destructive" onSelect={() => after(ui.setStatus(o, "cancelled"))}>
+              Annuler la commande…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )
+  if (!s.manager) return null
+  if (shipped) return <p className={cn("text-sm text-muted-foreground", className)}>Colis chez le transporteur : la commande ne peut plus être rouverte ni annulée.</p>
+  return (
+    <div className={cn("flex flex-wrap gap-2", className)}>
+      <Button variant="outline" onClick={() => ui.setStatus(o, "new")}>
+        Rouvrir la commande…
+      </Button>
+      {o.status === "confirmed" && (
+        <Button variant="outline" className="text-danger hover:text-danger" onClick={() => ui.setStatus(o, "cancelled")}>
+          Annuler la commande…
+        </Button>
       )}
     </div>
   )
 }
 
+// Unsaved notes survive switching orders, closing the sheet or a live refresh (tab lifetime only).
+const noteDrafts = new Map<string, string>()
+
 export function NoteForm({ o }: { o: Order }) {
   const s = useSession()
   const qc = useQueryClient()
   const { error, busy, run } = useSubmit()
-  const [note, setNote] = useState("")
+  const [note, setNoteState] = useState(() => noteDrafts.get(o.id) || "")
+  const setNote = (v: string) => {
+    setNoteState(v)
+    if (v) noteDrafts.set(o.id, v)
+    else noteDrafts.delete(o.id)
+  }
   return (
     <form
       className="grid gap-2"
@@ -695,7 +999,7 @@ export function OrderHistory({ o }: { o: Order }) {
   const s = useSession()
   return (
     <section>
-      <h3 className="mb-3 text-sm font-semibold">Historique · 100 derniers événements</h3>
+      <h3 className="mb-3 text-sm font-semibold">Historique{(o.events || []).length ? " (" + (o.events || []).length + ")" : ""}</h3>
       <ol className="grid gap-3 border-l pl-4">
         {(o.events || []).map((e, i) => (
           <li key={e.id ?? i} className="relative">
@@ -837,22 +1141,22 @@ function OrderDetailDialog({ id, onClose }: { id: string | null; onClose: () => 
           <Loading />
         ) : (
           <div className="grid gap-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-lg font-semibold">{o.customer_name}</p>
-                <a href={"tel:" + o.phone} className="num text-sm text-primary">
-                  {o.phone}
-                </a>
+                <p className="num text-sm text-muted-foreground">{o.phone}</p>
               </div>
-              <StatusBadge status={o.status} />
+              <StatusMenu o={o} />
             </div>
+            <ContactActions phone={o.phone} full />
+            <OrderActions o={o} className="border-y py-4" />
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg bg-muted p-4">
                 <p className="text-xs text-muted-foreground">Livraison {o.delivery_type === "desk" ? "en point de retrait" : "à domicile"}</p>
                 <p className="mt-1 font-semibold">
-                  {o.wilaya} · {o.commune || "Commune à compléter"}
+                  {o.wilaya} · {o.commune || <span className="text-warning">Commune à compléter</span>}
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">{o.address || "Adresse à compléter"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{o.address || <span className="text-warning">Adresse à compléter</span>}</p>
               </div>
               <div className="rounded-lg bg-muted p-4">
                 <p className="text-xs text-muted-foreground">Source & affectation</p>
@@ -860,6 +1164,12 @@ function OrderDetailDialog({ id, onClose }: { id: string | null; onClose: () => 
                   {CHANNELS[o.channel]} · {s.memberName(o.assigned_to)}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">{o.source_detail || "Aucun détail de source ajouté."}</p>
+                {s.manager && (
+                  <Button variant="link" size="sm" className="mt-1 h-auto min-h-6 px-0 coarse:min-h-11" onClick={() => ui.assign([{ id: o.id, version: o.version }], o.assigned_to)}>
+                    <Users />
+                    Changer l’agent
+                  </Button>
+                )}
               </div>
             </div>
             <ItemsSummary o={o} />
@@ -869,16 +1179,7 @@ function OrderDetailDialog({ id, onClose }: { id: string | null; onClose: () => 
               </span>
               <b className="num text-xl">{money(o.total)}</b>
             </div>
-            {s.manager && (
-              <div>
-                <Button variant="outline" onClick={() => ui.assign([{ id: o.id, version: o.version }], o.assigned_to)}>
-                  <Users />
-                  Affecter à un agent
-                </Button>
-              </div>
-            )}
             <SourcePanels o={o} />
-            <OrderActions o={o} />
             <NoteForm o={o} />
             <OrderHistory o={o} />
           </div>
@@ -911,8 +1212,16 @@ function OrderFormDialog({ id, onClose }: { id: string | null; onClose: () => vo
   const [search, setSearch] = useState("")
   const [dupHint, setDupHint] = useState("")
   const [ready, setReady] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const { error, busy, run } = useSubmit()
   const o = detail.data
+  // Closing with unsaved input asks first: an order typed during a WhatsApp chat must not vanish on Esc or a stray click.
+  const requestClose = () => {
+    if (busy) return
+    if (dirty) setLeaving(true)
+    else onClose()
+  }
 
   // Initial catalogue; editing also loads the products already on the order so their names stay visible.
   useEffect(() => {
@@ -1012,7 +1321,8 @@ function OrderFormDialog({ id, onClose }: { id: string | null; onClose: () => vo
   const data = o || ({} as Partial<Order>)
 
   return (
-    <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
+    <>
+    <Dialog open onOpenChange={(open) => !open && requestClose()}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{id ? "Modifier #" + (o ? orderCode(o) : "") : "Nouvelle commande"}</DialogTitle>
@@ -1038,7 +1348,7 @@ function OrderFormDialog({ id, onClose }: { id: string | null; onClose: () => vo
             }
           />
         ) : (
-          <form id="order-form" className="grid gap-6" onSubmit={submit}>
+          <form id="order-form" className="grid gap-6" onSubmit={submit} onInput={() => setDirty(true)} onChange={() => setDirty(true)}>
             <fieldset className="grid gap-4 sm:grid-cols-2">
               <legend className="mb-3 text-sm font-semibold">Client & livraison</legend>
               <FormField label="Nom du client" htmlFor="o-name" required>
@@ -1060,7 +1370,15 @@ function OrderFormDialog({ id, onClose }: { id: string | null; onClose: () => vo
                 />
               </FormField>
               <FormField label="Wilaya" htmlFor="o-wilaya" required>
-                <Input id="o-wilaya" name="wilaya" defaultValue={data.wilaya} required minLength={2} maxLength={80} />
+                <NativeSelect id="o-wilaya" name="wilaya" defaultValue={data.wilaya || ""} required>
+                  <NativeSelectOption value="">Choisir la wilaya</NativeSelectOption>
+                  {data.wilaya && !WILAYAS.some((w) => w.value === data.wilaya) && <NativeSelectOption value={data.wilaya}>{data.wilaya} (valeur actuelle)</NativeSelectOption>}
+                  {WILAYAS.map((w) => (
+                    <NativeSelectOption key={w.code} value={w.value}>
+                      {w.value}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
               </FormField>
               <FormField label="Commune" htmlFor="o-commune">
                 <Input id="o-commune" name="commune" defaultValue={data.commune} maxLength={100} />
@@ -1187,7 +1505,7 @@ function OrderFormDialog({ id, onClose }: { id: string | null; onClose: () => vo
           </form>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={busy}>
+          <Button variant="outline" onClick={requestClose} disabled={busy}>
             Annuler
           </Button>
           {!loading && !noCatalog && !detail.isError && (
@@ -1198,5 +1516,22 @@ function OrderFormDialog({ id, onClose }: { id: string | null; onClose: () => vo
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <Dialog open={leaving} onOpenChange={setLeaving}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Abandonner la saisie ?</DialogTitle>
+          <DialogDescription>Les informations saisies dans cette commande ne sont pas enregistrées.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setLeaving(false)} autoFocus>
+            Continuer la saisie
+          </Button>
+          <Button variant="destructive" onClick={onClose}>
+            Abandonner
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

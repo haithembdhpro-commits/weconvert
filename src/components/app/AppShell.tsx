@@ -31,6 +31,29 @@ export const TITLES: Record<string, string> = Object.fromEntries(NAV.flatMap(([,
 // Modules connected to the backend. The others are planned and show no data.
 export const LIVE_PAGES = new Set(["dashboard", "performance", "orders", "confirmation", "shipping", "products", "team", "integrations", "settings"])
 
+// Planned modules are grouped, collapsed, under "Bientôt" so the menu shows what works first (UX audit 28/10/2026).
+const PLANNED: NavItem[] = NAV.flatMap(([, items]) => items.filter(([id]) => !LIVE_PAGES.has(id)))
+const SOON_KEY = "weconvert.nav.soon"
+
+function NavLink({ item: [id, label, Icon], route, count, onNavigate, muted }: { item: NavItem; route: string; count?: number; onNavigate?: () => void; muted?: boolean }) {
+  const active = route === id
+  return (
+    <a
+      href={"#" + id}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex min-h-9 coarse:min-h-11 items-center gap-3 rounded-md px-3 text-sm outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring",
+        active ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground" : muted ? "text-muted-foreground" : "text-sidebar-foreground",
+      )}
+    >
+      <Icon className="size-[18px] shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {count !== undefined && <span className="num rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">{f(count)}</span>}
+    </a>
+  )
+}
+
 const ROLE_LABEL = { owner: "Propriétaire", admin: "Administrateur", agent: "Agent de confirmation" } as const
 
 function Avatar({ name, className }: { name: string; className?: string }) {
@@ -44,8 +67,15 @@ function Avatar({ name, className }: { name: string; className?: string }) {
 function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () => void }) {
   const s = useSession()
   const overview = useOverview().data
-  const counts: Record<string, number | undefined> = { orders: overview?.all, confirmation: overview?.pending }
+  const counts: Record<string, number | undefined> = { confirmation: overview?.pending }
   const [storeOpen, setStoreOpen] = useState(false)
+  const [soonOpen, setSoonOpen] = useState(() => {
+    try {
+      return localStorage.getItem(SOON_KEY) === "1"
+    } catch {
+      return false
+    }
+  })
   const me = s.members.find((m) => m.user_id === s.user?.id)
   return (
     <div className="flex h-full flex-col gap-2 p-3">
@@ -53,7 +83,7 @@ function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () 
         <BrandMark />
         <span>
           <span className="block text-base font-bold tracking-tight">WeConvert</span>
-          <span className="block text-[0.6875rem] font-medium tracking-wider text-muted-foreground">COD WORKSPACE</span>
+          <span className="block text-xs font-medium text-muted-foreground">Espace COD</span>
         </span>
       </a>
       <button
@@ -71,35 +101,38 @@ function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () 
         <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
       </button>
       <nav aria-label="Navigation principale" className="-mx-1 flex-1 overflow-y-auto px-1 pb-2">
-        {NAV.map(([group, items]) => (
-          <div key={group} className="mt-3">
-            <div className="px-3 pb-1 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground uppercase">{group}</div>
-            {items.map(([id, label, Icon]) => {
-              const active = route === id
-              const later = !LIVE_PAGES.has(id)
-              return (
-                <a
-                  key={id}
-                  href={"#" + id}
-                  onClick={onNavigate}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-9 coarse:min-h-11 items-center gap-3 rounded-md px-3 text-sm outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring",
-                    active ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground" : "text-sidebar-foreground",
-                  )}
-                >
-                  <Icon className="size-[18px] shrink-0" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                  {counts[id] !== undefined ? (
-                    <span className="num rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">{f(counts[id])}</span>
-                  ) : later ? (
-                    <span className="text-[0.6875rem] text-muted-foreground">À venir</span>
-                  ) : null}
-                </a>
-              )
-            })}
-          </div>
-        ))}
+        {NAV.map(([group, items]) => {
+          const live = items.filter(([id]) => LIVE_PAGES.has(id))
+          if (!live.length) return null
+          return (
+            <div key={group} className="mt-3">
+              <div className="px-3 pb-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">{group}</div>
+              {live.map((item) => (
+                <NavLink key={item[0]} item={item} route={route} count={counts[item[0]]} onNavigate={onNavigate} />
+              ))}
+            </div>
+          )
+        })}
+        <details
+          className="group mt-3"
+          open={soonOpen || PLANNED.some(([id]) => id === route)}
+          onToggle={(e) => {
+            const open = (e.currentTarget as HTMLDetailsElement).open
+            setSoonOpen(open)
+            try {
+              localStorage.setItem(SOON_KEY, open ? "1" : "0")
+            } catch {}
+          }}
+        >
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md px-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring coarse:min-h-11 [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+            Bientôt
+            <span className="num ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium normal-case tracking-normal">{PLANNED.length}</span>
+          </summary>
+          {PLANNED.map((item) => (
+            <NavLink key={item[0]} item={item} route={route} onNavigate={onNavigate} muted />
+          ))}
+        </details>
       </nav>
       <a href="#settings" onClick={onNavigate} className="flex min-h-11 coarse:min-h-12 items-center gap-3 rounded-lg border px-3 py-2 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
         <Avatar name={me?.display_name || s.user?.email || "?"} />
@@ -292,13 +325,13 @@ export function AppShell({ route, children }: { route: RouteState; children: Rea
             key={id}
             href={"#" + id}
             aria-current={route.route === id ? "page" : undefined}
-            className={cn("grid min-h-14 content-center justify-items-center gap-0.5 text-[0.6875rem] font-medium outline-none focus-visible:bg-accent", route.route === id ? "text-primary" : "text-muted-foreground")}
+            className={cn("grid min-h-14 content-center justify-items-center gap-0.5 text-xs font-medium outline-none focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", route.route === id ? "text-primary" : "text-muted-foreground")}
           >
             <Icon className="size-5" aria-hidden />
             {label}
           </a>
         ))}
-        <button type="button" onClick={() => setMenu(true)} className="grid min-h-14 content-center justify-items-center gap-0.5 text-[0.6875rem] font-medium text-muted-foreground outline-none focus-visible:bg-accent">
+        <button type="button" onClick={() => setMenu(true)} className="grid min-h-14 content-center justify-items-center gap-0.5 text-xs font-medium text-muted-foreground outline-none focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
           <Menu className="size-5" aria-hidden />
           Menu
         </button>

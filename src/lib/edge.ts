@@ -114,7 +114,7 @@ export async function edge<T = any>(fn: keyof typeof LABELS | string, action: st
 export const ZR_STATES: Record<string, [string, "warning" | "danger" | "info" | "success" | "neutral"]> = {
   sending: ["Envoi en cours", "warning"],
   needs_review: ["À vérifier chez ZR", "danger"],
-  submitted: ["Prêt à expédier", "info"],
+  submitted: ["Colis créé chez ZR", "info"],
   in_transit: ["En transit", "info"],
   out_for_delivery: ["En livraison", "warning"],
   ready_for_pickup: ["Au point de retrait", "info"],

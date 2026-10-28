@@ -118,12 +118,12 @@ function YoucanAlerts() {
 // Dispatched / delivered / returned come from the carrier parcel: a carrier state, not a cash collection.
 const STAGES: { id: "all" | OrderStage; label: string; hint: string; icon: LucideIcon }[] = [
   { id: "all", label: "Toutes", hint: "Toutes les commandes", icon: Inbox },
-  { id: "new", label: "Nouvelles", hint: "À confirmer : nouvelle, appels, reportée, à vérifier", icon: PhoneCall },
+  { id: "new", label: "À confirmer", hint: "À confirmer : nouvelle, appels, reportée, à vérifier", icon: PhoneCall },
   { id: "preparing", label: "En préparation", hint: "Confirmées, pas encore remises au transporteur", icon: PackageOpen },
   { id: "dispatched", label: "Expédiées", hint: "Colis chez le transporteur", icon: Truck },
   { id: "delivered", label: "Livrées", hint: "Livré selon le transporteur (encaissement non vérifié)", icon: PackageCheck },
   { id: "returned", label: "Retournées", hint: "Retour confirmé par le transporteur", icon: Undo2 },
-  { id: "closed", label: "Annulées", hint: "Annulées, doublons et faux numéros", icon: XCircle },
+  { id: "closed", label: "Clôturées", hint: "Annulées, doublons et faux numéros", icon: XCircle },
 ]
 // Old links (#orders/pending, #orders/cancelled_all, #orders/confirmed) keep working.
 const ALIASES: Record<string, { stage: string; status: string }> = {
@@ -167,6 +167,15 @@ export function Orders({ tab }: { tab: string }) {
     setPage(1)
     setSelected(new Set())
   }, [stage, status, query, agent, ascending, s.store])
+  // A live refresh can move a selected order out of this filter: keep only rows still on screen.
+  useEffect(() => {
+    if (!list.data) return
+    setSelected((prev) => {
+      const visible = new Set(list.data!.items.map((x) => x.id))
+      const kept = [...prev].filter((id) => visible.has(id))
+      return kept.length === prev.size ? prev : new Set(kept)
+    })
+  }, [list.data])
   useEffect(() => {
     if (page > 1 && list.data && !orders.length && total > 0) setPage(Math.ceil(total / 20))
   }, [page, list.data, orders.length, total])
@@ -233,9 +242,9 @@ export function Orders({ tab }: { tab: string }) {
           <>
             <Button variant="outline" onClick={exportCsv} disabled={exporting} aria-busy={exporting}>
               <Download />
-              {exporting ? "Export en cours…" : "Exporter la sélection filtrée"}
+              {exporting ? "Export en cours…" : "Exporter (" + f(total) + ")"}
             </Button>
-            <Button size="lg" onClick={ui.newOrder}>
+            <Button onClick={ui.newOrder}>
               <Plus />
               Nouvelle commande
             </Button>
@@ -276,7 +285,7 @@ export function Orders({ tab }: { tab: string }) {
       <Card className="gap-0 overflow-hidden py-0">
         <div className="flex flex-wrap items-center gap-2 border-b p-4">
           <div className="relative min-w-[220px] flex-1">
-            <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" aria-hidden />
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Client, téléphone, wilaya, n° ou suivi…" aria-label="Rechercher" maxLength={200} className="pl-9" />
           </div>
           {s.manager && (
@@ -321,9 +330,31 @@ export function Orders({ tab }: { tab: string }) {
             </Button>
           </div>
         )}
-        {selected.size > 0 && s.manager && (
-          <div className="flex flex-wrap items-center gap-2 border-b bg-accent px-4 py-2 text-sm">
-            <span className="num font-medium">{selected.size} sélectionnée(s)</span>
+        <OrdersTable
+          orders={orders}
+          loading={list.isLoading}
+          error={list.isError ? list.error : undefined}
+          onRetry={() => list.refetch()}
+          selected={selected}
+          columns={columns}
+          onToggle={(id, on) =>
+            setSelected((prev) => {
+              const n = new Set(prev)
+              on ? n.add(id) : n.delete(id)
+              return n
+            })
+          }
+          onToggleAll={(on) => setSelected(on ? new Set(orders.map((x) => x.id)) : new Set())}
+        />
+        <Pager total={total} page={page} onPage={(p) => { setPage(Math.max(1, p)); setSelected(new Set()) }} />
+      </Card>
+      {/* Floating bar: selecting rows never shifts the table under the pointer. */}
+      {selected.size > 0 && s.manager && (
+        <div role="region" aria-label="Actions sur la sélection" className="pointer-events-none fixed inset-x-0 bottom-20 z-30 flex justify-center px-4 lg:bottom-6 lg:pl-[272px]">
+          <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-xl border bg-popover px-4 py-2 text-sm text-popover-foreground shadow-lg">
+            <span className="num font-medium" aria-live="polite">
+              {selected.size > 1 ? selected.size + " commandes sélectionnées" : "1 commande sélectionnée"}
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -342,23 +373,8 @@ export function Orders({ tab }: { tab: string }) {
               Désélectionner
             </Button>
           </div>
-        )}
-        {list.isError && <p className="p-4 text-sm text-danger">{safeError(list.error)}</p>}
-        <OrdersTable
-          orders={orders}
-          selected={selected}
-          columns={columns}
-          onToggle={(id, on) =>
-            setSelected((prev) => {
-              const n = new Set(prev)
-              on ? n.add(id) : n.delete(id)
-              return n
-            })
-          }
-          onToggleAll={(on) => setSelected(on ? new Set(orders.map((x) => x.id)) : new Set())}
-        />
-        <Pager total={total} page={page} onPage={(p) => { setPage(Math.max(1, p)); setSelected(new Set()) }} />
-      </Card>
+        </div>
+      )}
     </>
   )
 }

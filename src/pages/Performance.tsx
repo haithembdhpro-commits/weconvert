@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { BadgeCheck, Coins, Download, Filter, Plus, ShoppingBag, Trash2, Truck, Undo2 } from "lucide-react"
@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { EmptyState, FormError, FormField, Notice, PageHeader, Pager } from "@/components/app/page"
+import { EmptyState, FormError, FormField, Loading, Notice, PageHeader, Pager } from "@/components/app/page"
 import { FormDialog } from "@/components/app/FormDialog"
 import { type Tone } from "@/components/app/tone"
 import { useOrderUI } from "@/components/app/orders"
@@ -92,21 +92,33 @@ function Section({ title, description, children, className }: { title: string; d
 
 function Chart({ days }: { days: Row[] }) {
   const buckets = reportBuckets(days as any)
+  const scroller = useRef<HTMLDivElement>(null)
+  const lastKey = buckets.length ? buckets[buckets.length - 1].key : ""
+  // Open on the most recent days (once per period): the newest data must be visible without scrolling.
+  useEffect(() => {
+    if (scroller.current) scroller.current.scrollLeft = scroller.current.scrollWidth
+  }, [buckets.length, lastKey])
   const max = Math.max(1, ...buckets.map((b) => b.orders))
   if (!buckets.some((b) => b.orders)) return <EmptyState title="Aucune commande sur cette période" description="Essayez une autre plage de dates ou un autre canal." />
   const step = buckets.length > 20 ? 5 : buckets.length > 12 ? 2 : 1
   const label = (b: (typeof buckets)[number]) => (b.from === b.to ? shortDate(b.from) : shortDate(b.from) + " – " + shortDate(b.to))
   return (
     <>
-      <div role="region" aria-label="Évolution des commandes ; défilement horizontal si nécessaire" tabIndex={0} className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <div className="flex h-56 min-w-full items-stretch gap-1.5 border-b" style={{ width: Math.max(buckets.length * 28, 0) }}>
+      <div
+        ref={scroller}
+        role="region"
+        aria-label="Évolution des commandes ; défilement horizontal si nécessaire"
+        tabIndex={0}
+        className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <div className="flex h-56 min-w-full items-stretch gap-1 border-b" style={{ width: Math.max(buckets.length * 20, 0) }}>
           {buckets.map((b, i) => (
             <div key={b.key} role="img" tabIndex={0} title={`${label(b)} : ${f(b.orders)} reçues, ${f(b.confirmed)} confirmées, ${f(b.cancelled)} annulées`} aria-label={`${label(b)} : ${f(b.orders)} reçues, ${f(b.confirmed)} confirmées, ${f(b.cancelled)} annulées`} className="relative flex flex-1 flex-col justify-end pb-6 outline-none focus-visible:bg-accent">
               <div className="flex h-full items-end justify-center gap-0.5" aria-hidden>
                 <i className="w-1/2 max-w-4 rounded-t-sm bg-chart-2" style={{ height: `${b.orders ? Math.max(2, (100 * b.orders) / max) : 0}%` }} />
                 <i className="w-1/2 max-w-4 rounded-t-sm bg-chart-1" style={{ height: `${b.confirmed ? Math.max(2, (100 * b.confirmed) / max) : 0}%` }} />
               </div>
-              <small className="num absolute bottom-0 left-1/2 -translate-x-1/2 text-[0.6875rem] whitespace-nowrap text-muted-foreground">{i % step === 0 || i === buckets.length - 1 ? shortDate(b.from) : ""}</small>
+              <small className="num absolute bottom-0 left-1/2 -translate-x-1/2 text-xs whitespace-nowrap text-muted-foreground">{i % step === 0 || i === buckets.length - 1 ? shortDate(b.from) : ""}</small>
             </div>
           ))}
         </div>
@@ -291,13 +303,15 @@ export function Performance() {
 
       {report.isError ? (
         <Notice tone="danger" role="alert" className="mt-5">{safeError(report.error)}</Notice>
-      ) : !r ? null : (
+      ) : !r ? (
+        <Loading text="Calcul du rapport…" />
+      ) : (
         <>
           <Card className={cn("mt-5 grid gap-px overflow-hidden bg-border py-0", s.manager ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3")}>
             <Kpi label="Commandes reçues" value={f(sm.orders)} foot={"Créées du " + label} icon={ShoppingBag} />
             <Kpi label="Taux de confirmation" value={reportRate(sm.confirmed, sm.rate_base ?? sm.orders)} foot={`${f(sm.confirmed)} confirmées ÷ ${f(sm.rate_base ?? sm.orders)} reçues hors historique Woo`} icon={BadgeCheck} />
             <Kpi label="Montant COD confirmé" value={money(sm.confirmed_amount)} foot="Promis à la livraison · non encaissé" icon={Coins} />
-            {s.manager && <Kpi label="Commandes livrées" value={f(delivered.data?.total)} foot={"Créées du " + label + " · statut ZR actuel · voir la liste"} icon={Truck} onClick={scrollToDelivered} />}
+            {s.manager && <Kpi label="Commandes livrées" value={delivered.data ? f(delivered.data.total) : delivered.isError ? "—" : "…"} foot={"Créées du " + label + " · statut ZR actuel · voir la liste"} icon={Truck} onClick={scrollToDelivered} />}
           </Card>
           {legacy > 0 && (
             <Notice tone="warning" className="mt-4">

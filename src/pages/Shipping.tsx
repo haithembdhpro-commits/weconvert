@@ -366,10 +366,10 @@ export function Shipping() {
       <Card className="mt-5 gap-0 overflow-hidden py-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b p-4 sm:px-6">
           <div>
-            <h2 className="font-semibold">Prêtes à expédier</h2>
-            <p className="text-sm text-muted-foreground">Commandes confirmées, sans colis et sans alerte source</p>
+            <h2 className="font-semibold">En préparation · sans colis</h2>
+            <p className="text-sm text-muted-foreground">Commandes confirmées, sans colis ZR et sans alerte source</p>
           </div>
-          <span className="num rounded-full bg-muted px-3 py-1 text-xs font-medium">{f(queue.length)} affichées</span>
+          <span className="num rounded-full bg-muted px-3 py-1 text-xs font-medium">{f(queue.length)} {queue.length > 1 ? "commandes" : "commande"}</span>
         </div>
         {!queue.length ? (
           <EmptyState title="Aucune commande prête" description="Confirmez une commande avec une adresse complète dans votre boutique." />

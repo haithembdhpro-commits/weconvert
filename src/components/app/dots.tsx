@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils"
 
 /*
  * Dot-matrix charts (style requested 28/10/2026). Pure SVG, no chart library.
- * Colours come from currentColor / CSS tokens, so blue and orange accents, light and dark themes all work.
+ * Colours come from currentColor / CSS tokens, so light and dark themes both work.
  * Every chart carries a text alternative (aria-label) — colour never carries meaning alone.
  */
 

@@ -28,8 +28,8 @@ export function EmptyState({ title = "Aucun résultat", description = "Essayez u
   )
 }
 
-export function Notice({ children, tone = "info", className, role = "status" }: { children: ReactNode; tone?: "info" | "warning" | "danger"; className?: string; role?: "status" | "alert" }) {
-  const t = tone === "warning" ? "bg-warning-soft text-warning" : tone === "danger" ? "bg-danger-soft text-danger" : "bg-info-soft text-info"
+export function Notice({ children, tone = "info", className, role = "status" }: { children: ReactNode; tone?: "info" | "success" | "warning" | "danger"; className?: string; role?: "status" | "alert" }) {
+  const t = tone === "success" ? "bg-success-soft text-success" : tone === "warning" ? "bg-warning-soft text-warning" : tone === "danger" ? "bg-danger-soft text-danger" : "bg-info-soft text-info"
   return (
     <div role={role} className={cn("flex items-start gap-2.5 rounded-lg px-3.5 py-3 text-sm", t, className)}>
       <Info className="mt-0.5 size-4 shrink-0" aria-hidden />

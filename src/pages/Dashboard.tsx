@@ -84,43 +84,6 @@ function Kpi({
 }
 
 const PERIODS = [7, 14, 30]
-const ACCENT_KEY = "wc-accent"
-
-/** Temporary blue / orange comparison (owner request 28/10/2026). Applies to the whole app, remembered per browser. */
-function AccentPreview() {
-  const [accent, setAccent] = useState(() => (document.documentElement.dataset.accent === "orange" ? "orange" : "blue"))
-  useEffect(() => {
-    if (accent === "orange") document.documentElement.dataset.accent = "orange"
-    else delete document.documentElement.dataset.accent
-    try {
-      localStorage.setItem(ACCENT_KEY, accent)
-    } catch {}
-  }, [accent])
-  return (
-    <div role="radiogroup" aria-label="Aperçu de la couleur d’accent" className="inline-flex rounded-lg border bg-card p-1">
-      {[
-        ["blue", "Bleu", "bg-[#0071a4]"],
-        ["orange", "Orange", "bg-[#f97316]"],
-      ].map(([id, label, dot]) => (
-        <button
-          key={id}
-          type="button"
-          role="radio"
-          aria-checked={accent === id}
-          onClick={() => setAccent(id)}
-          className={cn(
-            "inline-flex min-h-8 coarse:min-h-11 items-center gap-2 rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            accent === id ? "bg-secondary font-medium text-secondary-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <span className={cn("size-2.5 rounded-full", dot)} aria-hidden />
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 function Ago({ at }: { at: number }) {
   const [, tick] = useState(0)
   useEffect(() => {
@@ -160,7 +123,7 @@ export function Dashboard() {
 
   const tasks = [
     { icon: Phone, n: m.pending, label: "commandes à confirmer", desc: "Vérifier les coordonnées et la disponibilité", href: "#confirmation" },
-    { icon: CalendarClock, n: m.due, label: "rappels arrivés à échéance", desc: "Planifier les rappels", href: "#confirmation/due" },
+    { icon: CalendarClock, n: m.due, label: "rappels à faire maintenant", desc: "Rappeler les clients à l’heure convenue", href: "#confirmation/due" },
     ...(s.manager
       ? [{ icon: Truck, n: delivered.data?.total, label: "livrées (créées ces 7 j)", desc: "Statut ZR · reversement non vérifié", href: "#performance" }]
       : []),
@@ -176,7 +139,6 @@ export function Dashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AccentPreview />
           <div role="radiogroup" aria-label="Période" className="inline-flex rounded-lg border bg-card p-1">
             {PERIODS.map((x) => (
               <button
@@ -194,25 +156,25 @@ export function Dashboard() {
               </button>
             ))}
           </div>
-          <Button size="lg" onClick={ui.newOrder}>
-            Nouvelle commande
+          <Button onClick={ui.newOrder}>
             <Plus />
+            Nouvelle commande
           </Button>
         </div>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi title="Commandes reçues" icon={ShoppingBag} href="#orders" value={c ? f(c.orders) : "…"} delta={<Delta now={c ? c.orders : null} before={p ? p.orders : null} />}>
+        <Kpi title="Commandes reçues" icon={ShoppingBag} href="#orders" value={c ? f(c.orders) : cur.isError ? "—" : "…"} delta={<Delta now={c ? c.orders : null} before={p ? p.orders : null} />}>
           <DotSpark values={days.map((d) => Number(d.orders) || 0)} label={`Commandes reçues par jour, ${period} : ${days.map((d) => d.orders).join(", ")}`} />
         </Kpi>
-        <Kpi title="Confirmées" icon={CheckCircle2} href="#orders/confirmed" tone="text-success" value={c ? f(c.confirmed) : "…"} delta={<Delta now={c ? c.confirmed : null} before={p ? p.confirmed : null} />}>
+        <Kpi title="Confirmées" icon={CheckCircle2} href="#orders/confirmed" tone="text-success" value={c ? f(c.confirmed) : cur.isError ? "—" : "…"} delta={<Delta now={c ? c.confirmed : null} before={p ? p.confirmed : null} />}>
           <DotSpark values={days.map((d) => Number(d.confirmed) || 0)} label={`Confirmations vérifiées par jour, ${period} : ${days.map((d) => d.confirmed).join(", ")}`} />
         </Kpi>
         <Kpi
           title="Taux de confirmation"
           icon={Percent}
           href="#performance"
-          value={c ? reportRate(c.confirmed, base(c)) : "…"}
+          value={c ? reportRate(c.confirmed, base(c)) : cur.isError ? "—" : "…"}
           delta={<Delta now={rate(c)} before={rate(p)} points />}
         >
           <span className="block w-24">
@@ -224,11 +186,15 @@ export function Dashboard() {
           icon={Phone}
           href="#confirmation"
           tone="text-warning"
-          value={f(m.pending)}
+          value={m.pending === undefined ? (ov.isError ? "—" : "…") : f(m.pending)}
           delta={
-            <span className="text-muted-foreground">
-              dont <b className="num text-foreground">{f(m.due)}</b> rappel{Number(m.due) > 1 ? "s" : ""} échu{Number(m.due) > 1 ? "s" : ""} · maintenant
-            </span>
+            m.due === undefined ? (
+              <span className="text-muted-foreground">{ov.isError ? "Indisponible pour le moment" : "Chargement…"}</span>
+            ) : (
+              <span className="text-muted-foreground">
+                dont <b className="num text-foreground">{f(m.due)}</b> rappel{Number(m.due) > 1 ? "s" : ""} à faire maintenant
+              </span>
+            )
           }
         />
       </div>
@@ -273,7 +239,7 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card className="gap-0 p-5 sm:p-6">
+        <Card className="gap-0 self-start p-5 sm:p-6">
           <div className="flex items-start justify-between gap-2">
             <div>
               <h2 className="text-base font-semibold">Wilayas</h2>
@@ -320,7 +286,7 @@ export function Dashboard() {
               <ArrowRight />
             </Button>
           </div>
-          <OrdersTable orders={latest.data?.items || []} compact />
+          <OrdersTable orders={latest.data?.items || []} compact loading={latest.isLoading} error={latest.isError ? latest.error : undefined} onRetry={() => latest.refetch()} />
         </Card>
         <Card className="gap-0 p-5 sm:p-6">
           <h2 className="text-base font-semibold">Votre journée</h2>
