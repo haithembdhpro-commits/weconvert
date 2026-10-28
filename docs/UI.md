@@ -55,3 +55,9 @@ Sans variables, le build vise le projet de `src/domain/config.json` (production)
 - Sélection multiple : barre flottante en bas d'écran (le tableau ne bouge pas) ; la sélection ne garde que les lignes encore visibles après un rafraîchissement.
 - Formulaire de commande : wilaya choisie dans la liste officielle des 69 wilayas (`src/lib/wilayas.ts`, format « 16 - Alger », codes 59–69 du décret 26-206) ; fermer avec une saisie en cours demande « Abandonner la saisie ? ».
 - Menu : les modules non branchés sont regroupés sous « Bientôt » (replié par défaut, choix mémorisé).
+
+## Navigation rapide et notifications (lot 2, 29/10/2026)
+- **Fiche commande en panneau latéral** (Sheet non modal à droite, plein écran sur téléphone) : la liste reste utilisable, la ligne ouverte est surlignée, cliquer une autre ligne change de fiche. Échap ou la croix ferment.
+- **Recherche globale** : Ctrl+K / ⌘K ou le champ de l'en-tête. Recherche serveur (`crm_order_board`, RLS : un agent ne trouve que ses commandes) par client, téléphone, n°, wilaya, suivi ; pages ; action « Nouvelle commande ». Flèches + Entrée.
+- **Notifications** (cloche de l'en-tête) : nouvelles commandes, rappels arrivés à l'heure, colis livrés ou retournés (statut ZR, encaissement non vérifié), sur 7 jours, 30 derniers éléments. Flux calculé par `crm_notifications` sous RLS (aucune copie de données) ; seul « lu jusqu'à » est stocké par utilisateur et boutique (`crm_notification_seen`, écrit par `crm_notifications_seen`). Le titre de l'onglet affiche le nombre non lu ; rafraîchi par le signal temps réel.
+- **Commandes sur téléphone** : bouton « Filtres » (nombre de filtres actifs) qui ouvre un panneau avec agent, ordre, nombre de résultats et « Réinitialiser ». Sous le tableau : totaux de la page (commandes, COD demandé non encaissé, en préparation/expédiées).
