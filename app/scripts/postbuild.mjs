@@ -25,7 +25,7 @@ await writeFile(indexPath, html)
 
 await writeFile(
   new URL("../dist/_headers", import.meta.url),
-  "/*\n  Content-Security-Policy: " + csp + "; frame-ancestors 'none'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n\n/index.html\n  Cache-Control: no-cache\n",
+  "/*\n  Content-Security-Policy: " + csp + "; frame-ancestors 'none'\n  X-Frame-Options: DENY\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n\n/index.html\n  Cache-Control: no-cache\n",
 )
 // A real secret key looks like sb_secret_<random>; supabase-js itself only contains the bare prefix.
 const assets = new URL("../dist/assets/", import.meta.url)
