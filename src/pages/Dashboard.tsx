@@ -49,8 +49,8 @@ function Delta({ now, before, points = false }: { now: number | null; before: nu
   const down = d < -0.05
   const txt = (d > 0 ? "+" : "") + d.toFixed(1).replace(".", ",") + (points ? " pt" : " %")
   return (
-    <span className="inline-flex items-center gap-1">
-      <span className={cn("num font-semibold", up ? "text-success" : down ? "text-danger" : "text-muted-foreground")}>
+    <span className="inline-flex flex-wrap items-center gap-x-1">
+      <span className={cn("num font-semibold whitespace-nowrap", up ? "text-success" : down ? "text-danger" : "text-muted-foreground")}>
         <span aria-hidden>{up ? "▲" : down ? "▼" : "■"}</span> {txt}
       </span>
       <span className="text-muted-foreground">vs période précédente</span>
@@ -63,8 +63,8 @@ function Kpi({
 }: { title: string; icon: typeof Phone; value: string; delta: React.ReactNode; href: string; children?: React.ReactNode; tone?: string }) {
   return (
     <Card className="group relative gap-0 p-5 transition-shadow hover:shadow-md">
-      <div className="flex items-center gap-2.5">
-        <span className="grid size-8 place-items-center rounded-lg bg-secondary text-secondary-foreground">
+      <div className="flex min-h-10 items-center gap-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
           <Icon className="size-[18px]" aria-hidden />
         </span>
         <h2 className="leading-tight font-medium">{title}</h2>
@@ -72,13 +72,11 @@ function Kpi({
           <ArrowUpRight className="size-[18px]" aria-hidden />
         </a>
       </div>
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="num text-[1.75rem] leading-none font-semibold tracking-tight">{value}</p>
-          <p className="mt-2 text-[0.8125rem]">{delta}</p>
-        </div>
+      <div className="mt-4 flex items-end justify-between gap-3 sm:min-h-14">
+        <p className="num min-w-0 text-[1.75rem] leading-none font-semibold tracking-tight">{value}</p>
         <span className={cn("shrink-0", tone)}>{children}</span>
       </div>
+      <p className="mt-2 text-[0.8125rem]">{delta}</p>
     </Card>
   )
 }
@@ -276,7 +274,7 @@ export function Dashboard() {
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <Card className="gap-0 overflow-hidden py-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-5 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-5 sm:px-6">
             <div>
               <h2 className="text-base font-semibold">Dernières commandes</h2>
               <p className="text-sm text-muted-foreground">Changez le statut directement depuis le badge</p>

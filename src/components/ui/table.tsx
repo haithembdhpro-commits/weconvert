@@ -3,11 +3,16 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+// Outer cells line up with the card padding around the table: 16 px on phones, 24 px from `sm`
+// (same as card headers `px-4 sm:px-6`). `inset="compact"` keeps 16 px for tables nested in a bordered box.
+function Table({ className, inset = "card", ...props }: React.ComponentProps<"table"> & { inset?: "card" | "compact" }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn(
+        "relative w-full overflow-x-auto [--table-inset:1rem]",
+        inset === "card" && "sm:[--table-inset:1.5rem]"
+      )}
     >
       <table
         data-slot="table"
@@ -69,7 +74,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground first:ps-(--table-inset) last:pe-(--table-inset) [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -82,7 +87,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "p-2 align-middle whitespace-nowrap first:ps-(--table-inset) last:pe-(--table-inset) [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

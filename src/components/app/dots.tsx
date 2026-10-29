@@ -84,17 +84,20 @@ export function DotStack({ days, rows = 10 }: { days: DotDay[]; rows?: number })
         })}
       </svg>
       <div className="relative h-4 text-xs text-muted-foreground" aria-hidden>
-        {days.map((d, c) =>
-          c % every === 0 || c === days.length - 1 ? (
+        {days.map((d, c) => {
+          const last = c === days.length - 1
+          // A tick too close to « Aujourd’hui » would overlap it; the outer labels stay inside the card.
+          if (!last && (c % every !== 0 || days.length - 1 - c <= Math.max(1, Math.floor(every / 2)))) return null
+          return (
             <span
               key={d.date}
-              className={cn("num absolute -translate-x-1/2 whitespace-nowrap", c === days.length - 1 && "font-semibold text-foreground")}
+              className={cn("num absolute whitespace-nowrap", c === 0 ? "translate-x-0" : last ? "-translate-x-full" : "-translate-x-1/2", last && "font-semibold text-foreground")}
               style={{ left: `${((c * step + (k * GAP) / 2) / w) * 100}%` }}
             >
-              {c === days.length - 1 ? "Aujourd’hui" : shortDay(d.date)}
+              {last ? "Aujourd’hui" : shortDay(d.date)}
             </span>
-          ) : null,
-        )}
+          )
+        })}
       </div>
       <figcaption className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <Legend className="bg-success">Confirmées</Legend>

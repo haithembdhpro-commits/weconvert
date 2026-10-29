@@ -118,7 +118,7 @@ function Chart({ days }: { days: Row[] }) {
                 <i className="w-1/2 max-w-4 rounded-t-sm bg-chart-2" style={{ height: `${b.orders ? Math.max(2, (100 * b.orders) / max) : 0}%` }} />
                 <i className="w-1/2 max-w-4 rounded-t-sm bg-chart-1" style={{ height: `${b.confirmed ? Math.max(2, (100 * b.confirmed) / max) : 0}%` }} />
               </div>
-              <small className="num absolute bottom-0 left-1/2 -translate-x-1/2 text-xs whitespace-nowrap text-muted-foreground">{i % step === 0 || i === buckets.length - 1 ? shortDate(b.from) : ""}</small>
+              <small className={cn("num absolute bottom-0 text-xs whitespace-nowrap text-muted-foreground", i === 0 ? "left-0" : i === buckets.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2")}>{i % step === 0 || i === buckets.length - 1 ? shortDate(b.from) : ""}</small>
             </div>
           ))}
         </div>
@@ -141,7 +141,7 @@ function StatusBars({ s }: { s: Row }) {
         <li key={label}>
           <div className="flex justify-between text-sm"><b className="font-medium">{label}</b><span className="num text-muted-foreground">{f(n)} · {reportRate(n, s.rate_base ?? s.orders)}</span></div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-            <i className={cn("block h-full rounded-full", BAR[tone])} style={{ width: `${(s.rate_base ?? s.orders) ? Math.min(100, (100 * Number(n)) / Number(s.rate_base ?? s.orders)) : 0}%` }} />
+            <i className={cn("block h-full rounded-full", BAR[tone])} style={{ width: `${(s.rate_base ?? s.orders) ? Math.min(100, (100 * (Number(n) || 0)) / Number(s.rate_base ?? s.orders)) : 0}%` }} />
           </div>
         </li>
       ))}
@@ -439,7 +439,7 @@ export function Performance() {
                   </Notice>
                 </Card>
                 <div className="grid gap-5 lg:grid-cols-2">
-                  <Section title="Livraison par canal" description="La période suit la création des commandes, pas la date de livraison.">
+                  <Section className="self-start" title="Livraison par canal" description="La période suit la création des commandes, pas la date de livraison.">
                     <DataTable head={["Canal", "Reçues", "Expédiées", "Livrées", "Retournées", "COD livré"]} right={[1, 2, 3, 4, 5]} empty="Aucun colis rattaché pour ce filtre."
                       rows={(delivery.data?.channels || []).map((x) => [CHANNELS[x.channel] || x.channel, f(x.orders), f(x.shipped), f(x.delivered), f(x.returned), money(x.delivered_cod)])} />
                   </Section>

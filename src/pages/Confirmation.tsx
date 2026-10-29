@@ -171,7 +171,7 @@ export function Confirmation({ tab }: { tab: string }) {
               ))}
             </ul>
           )}
-          <Pager total={list.data?.total || 0} page={page} onPage={(p) => setPage(Math.max(1, p))} />
+          <Pager total={list.data?.total || 0} page={page} onPage={(p) => setPage(Math.max(1, p))} className="sm:px-4" />
         </Card>
 
         <Card id="call-sheet" className="scroll-mt-20 gap-0 p-5 sm:p-6">

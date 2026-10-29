@@ -250,15 +250,15 @@ export function OrdersTable({
     {/* Phones: one card per order, the agent's main format. */}
     <ul className="divide-y md:hidden">
       {orders.map((o) => (
-        <li key={o.id} data-order-row className={cn("flex items-start gap-3 px-4 py-3", ui.openId === o.id && "bg-accent")}>
+        <li key={o.id} data-order-row className={cn("relative flex items-start gap-3 px-4 py-3", ui.openId === o.id && "bg-accent")}>
           {selectable && (
             <label className="-m-3 grid size-11 shrink-0 place-items-center">
               <Checkbox checked={selected!.has(o.id)} onCheckedChange={(v) => onToggle?.(o.id, !!v)} aria-label={"Sélectionner " + orderCode(o)} className="size-5" />
             </label>
           )}
           <div className="grid min-w-0 flex-1 gap-1">
-          <button type="button" onClick={() => ui.openOrder(o.id)} className="grid min-w-0 gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="num text-sm font-semibold text-primary">#{orderCode(o)}</span>
+          <button type="button" onClick={() => ui.openOrder(o.id)} className="grid w-full min-w-0 gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span className="num min-h-7 pr-36 text-sm leading-7 font-semibold text-primary">#{orderCode(o)}</span>
             <span className="flex items-baseline justify-between gap-2">
               <span className="truncate font-medium">{o.customer_name}</span>
               <span className="num shrink-0 font-semibold">{money(o.total)}</span>
@@ -274,7 +274,8 @@ export function OrdersTable({
           </button>
           <ContactActions phone={o.phone} className="-ml-2" />
           </div>
-          <div className="shrink-0">
+          {/* Beside the order number only, so the name and amount use the full card width. */}
+          <div className="absolute top-2 right-4">
             <StatusMenu o={o} />
           </div>
         </li>
@@ -834,7 +835,7 @@ function AssignDialog({ count, current, onClose, onSubmit }: { count: number; cu
 export function ItemsSummary({ o }: { o: Order }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
-      <Table>
+      <Table inset="compact">
         <TableHeader>
           <TableRow className="bg-muted/60 hover:bg-muted/60">
             <TableHead>Produit</TableHead>
@@ -1149,11 +1150,11 @@ function OrderDetailDialog({ id, onClose }: { id: string | null; onClose: () => 
           if (target?.closest("[data-order-row], [data-sonner-toaster]")) e.preventDefault()
         }}
       >
-        <SheetHeader className="sticky top-0 z-10 border-b bg-background/95 pr-14 backdrop-blur">
+        <SheetHeader className="sticky top-0 z-10 border-b bg-background/95 pt-[max(1rem,env(safe-area-inset-top))] pr-14 backdrop-blur sm:pl-6">
           <SheetTitle>{o ? "Commande #" + orderCode(o) : "Commande"}</SheetTitle>
           <SheetDescription>{o ? CHANNELS[o.channel] + " · créée le " + time(o.created_at) : "Chargement…"}</SheetDescription>
         </SheetHeader>
-        <div className="p-4 sm:p-6">
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {q.isError ? (
           <FormError message={safeError(q.error)} />
         ) : !o ? (

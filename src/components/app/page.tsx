@@ -38,10 +38,10 @@ export function Notice({ children, tone = "info", className, role = "status" }: 
   )
 }
 
-export function Pager({ total, page, size = 20, onPage }: { total: number; page: number; size?: number; onPage: (p: number) => void }) {
+export function Pager({ total, page, size = 20, onPage, className }: { total: number; page: number; size?: number; onPage: (p: number) => void; className?: string }) {
   const last = Math.max(1, Math.ceil(total / size))
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground">
+    <div className={cn("flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:px-6", className)}>
       <span className="num">
         {f(total)} résultat{total > 1 ? "s" : ""} · {total ? (page - 1) * size + 1 : 0}–{Math.min(page * size, total)}
       </span>

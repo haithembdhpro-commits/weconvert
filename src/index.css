@@ -148,7 +148,8 @@
   * { @apply border-border outline-ring/50; }
   html { accent-color: var(--primary); caret-color: var(--primary); scrollbar-color: var(--picton-3) transparent; }
   .dark { scrollbar-color: var(--picton-14) transparent; }
-  body { @apply bg-background text-foreground antialiased; font-feature-settings: "tnum" 0; }
+  /* viewport-fit=cover: keep content clear of the notch / rounded corners in landscape (fixed bars add their own insets). */
+  body { @apply bg-background text-foreground antialiased; font-feature-settings: "tnum" 0; padding-inline: env(safe-area-inset-left) env(safe-area-inset-right); }
   ::selection { background: var(--picton-2); color: var(--picton-20); }
   .dark ::selection { background: var(--picton-14); color: #eef7ff; }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
