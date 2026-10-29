@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { User } from "@supabase/supabase-js"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { supabase } from "./supabase"
+import { AUTH_ENTRY, supabase } from "./supabase"
 import { clearPendingCommands, command as rawCommand, safeError, select } from "./api"
 import type { Member, Role, Store, Workspace } from "./types"
 
@@ -51,6 +51,14 @@ const storage = {
 
 // #oauth/<provider>/<ticket> and #join/<token> are consumed once, then replaced by a normal route.
 function captureEntryHash(): string {
+  // An expired or reused e-mail link, or a cancelled Google/Microsoft/Apple/Facebook sign-in, comes back as #error=…
+  if (AUTH_ENTRY.error) {
+    history.replaceState(null, "", location.pathname + location.search)
+    const { code, text } = AUTH_ENTRY.error
+    if (code === "otp_expired") return "Ce lien a expiré ou a déjà été utilisé. Cliquez sur « Mot de passe oublié » pour en recevoir un nouveau."
+    if (code === "access_denied" && !/expired|invalid/i.test(text)) return "Connexion annulée. Vous pouvez réessayer."
+    return "Le lien n’a pas pu être utilisé" + (text ? " : " + text : ".") + " Réessayez ou demandez un nouveau lien."
+  }
   const oauth = /^#oauth\/(shopify|youcan)\/([a-f0-9]{64})$/.exec(location.hash)
   if (oauth) {
     storage.set(sessionStorage, "wc-oauth", JSON.stringify({ provider: oauth[1], ticket: oauth[2] }))
@@ -72,7 +80,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
   const [phase, setPhase] = useState<Phase>("booting")
   const [user, setUser] = useState<User | null>(null)
-  const [authMode, setAuthMode] = useState<AuthMode>("login")
+  const [authMode, setAuthMode] = useState<AuthMode>(AUTH_ENTRY.recovery ? "password" : "login")
   const [authInfo, setAuthInfo] = useState("")
   const [workspace, setWorkspace] = useState<string | null>(null)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -83,6 +91,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [hasInvitation, setHasInvitation] = useState(() => !!storage.get(sessionStorage, "wc-invitation"))
   const epoch = useRef(0)
   const userRef = useRef<User | null>(null)
+  // A password-reset link signs the user in: they must choose a new password before entering the CRM.
+  const recovery = useRef(AUTH_ENTRY.recovery)
   const wsRef = useRef<string | null>(null)
   const storeRef = useRef<string | null>(null)
   userRef.current = user
@@ -127,6 +137,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const loadContext = useCallback(
     async (preferred?: string) => {
       const e = ++epoch.current
+      recovery.current = false // reached only once the new password is saved, or outside a reset link
       const u = userRef.current
       if (!u) {
         setPhase("auth")
@@ -186,6 +197,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         userRef.current = result.data.user
         setUser(result.data.user)
+        if (recovery.current) {
+          setAuthMode("password")
+          setPhase("auth")
+          return
+        }
         await loadContext()
       } catch (error) {
         if (!cancelled) {
@@ -196,16 +212,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     })()
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") {
+        recovery.current = false
         clear()
         setPhase("auth")
       }
       if (event === "PASSWORD_RECOVERY") {
+        recovery.current = true
         userRef.current = session?.user ?? null
         setUser(session?.user ?? null)
         setAuthMode("password")
         setPhase("auth")
       }
-      if (event === "SIGNED_IN" && session?.user.id !== userRef.current?.id) {
+      if (event === "SIGNED_IN" && !recovery.current && session?.user.id !== userRef.current?.id) {
         setTimeout(async () => {
           userRef.current = session!.user
           setUser(session!.user)

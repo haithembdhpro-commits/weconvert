@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { BrandMark } from "@/components/app/tone"
 import { FormError, FormField, Notice } from "@/components/app/page"
+import { SocialSignIn } from "@/components/app/social"
 import { rpc, safeError } from "@/lib/api"
 import { supabase } from "@/lib/supabase"
 import { useSession } from "@/lib/session"
@@ -104,6 +105,7 @@ export function AuthScreen() {
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{lead}</p>
       {authInfo && <Notice className="mt-4">{authInfo}</Notice>}
+      {!password && !reset && <SocialSignIn signup={signup} onError={setError} />}
       <form className="mt-6 grid gap-4" onSubmit={submit} key={mode}>
         {!password && (
           <FormField label="Adresse e-mail" htmlFor="auth-email" required>
@@ -213,7 +215,7 @@ export function OnboardingScreen() {
             <Input id="ob-store" name="store" required minLength={2} maxLength={100} />
           </FormField>
           <FormField label="Votre nom" htmlFor="ob-display" required>
-            <Input id="ob-display" name="display" required minLength={2} maxLength={100} autoComplete="name" />
+            <Input id="ob-display" name="display" required minLength={2} maxLength={100} autoComplete="name" defaultValue={String(user?.user_metadata?.full_name || user?.user_metadata?.name || "").slice(0, 100)} />
           </FormField>
           <Notice>Votre espace démarre vide. Vous pourrez ensuite ajouter vos produits et vos premières commandes.</Notice>
           <FormError message={error} />
