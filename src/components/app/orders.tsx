@@ -136,6 +136,8 @@ export function StatusMenu({ o }: { o: Order }) {
   const shipped = !!o.shipment && o.shipment.state !== "cancelled"
   const canReopen = s.manager && !pending && !shipped
   const canCancel = s.manager && o.status === "confirmed" && !shipped
+  // Confirmed, no parcel yet = « En préparation » (Confirmoo) : the parcel is created from Livraisons.
+  const canShip = s.manager && o.status === "confirmed" && !shipped && o.status_origin !== "woo_legacy"
   if (ui.queued.has(o.id)) return <ToneBadge tone="success">Confirmée · envoi…</ToneBadge>
   if (!pending && !canReopen && !canCancel) return <StatusBadge status={o.status} />
   return (
@@ -154,6 +156,8 @@ export function StatusMenu({ o }: { o: Order }) {
       <DropdownMenuContent align="start" className="w-56" onClick={(e) => e.stopPropagation()}>
         {pending ? (
           <>
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Statut actuel : {STATUS[o.status]?.[0] || o.status}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
             <DropdownMenuLabel>Appel sans réponse</DropdownMenuLabel>
             {CALLS.map((n) => (
               <DropdownMenuItem key={n} className="min-h-8 coarse:min-h-10" disabled={n <= o.attempts} onSelect={() => ui.noAnswer(o, n)}>
@@ -161,6 +165,7 @@ export function StatusMenu({ o }: { o: Order }) {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
+            <DropdownMenuLabel>Client joint</DropdownMenuLabel>
             <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.setStatus(o, "confirmed")}>
               Confirmée
             </DropdownMenuItem>
@@ -184,10 +189,18 @@ export function StatusMenu({ o }: { o: Order }) {
         ) : (
           <>
             <DropdownMenuLabel>Statut actuel : {STATUS[o.status]?.[0] || o.status}</DropdownMenuLabel>
+            {canShip && (
+              <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => { location.hash = "#shipping" }}>
+                Préparer l’expédition (Livraisons)
+              </DropdownMenuItem>
+            )}
             {canReopen && (
+              <>
+                {canShip && <DropdownMenuSeparator />}
               <DropdownMenuItem className="min-h-8 coarse:min-h-10" onSelect={() => ui.setStatus(o, "new")}>
                 Rouvrir la commande…
               </DropdownMenuItem>
+              </>
             )}
             {canCancel && (
               <DropdownMenuItem className="min-h-8 coarse:min-h-10" variant="destructive" onSelect={() => ui.setStatus(o, "cancelled")}>

@@ -1,5 +1,6 @@
 declare module "@domain/domain.mjs" {
   export const STATUS: Record<string, [string, string]>
+  export const STATUS_ORDER: string[]
   export const PENDING: string[]
   export const CHANNELS: Record<string, string>
   export function requestId(): string

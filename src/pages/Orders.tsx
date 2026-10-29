@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { ArrowDownUp, Columns3, Download, ExternalLink, Inbox, PackageCheck, PackageOpen, PhoneCall, Plus, RotateCcw, Search, SlidersHorizontal, Truck, Undo2, Users, X, XCircle, type LucideIcon } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { CHANNELS, STATUS, csvCell } from "@domain/domain.mjs"
+import { CHANNELS, STATUS, STATUS_ORDER, csvCell } from "@domain/domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -298,6 +298,14 @@ export function Orders({ tab }: { tab: string }) {
             Filtres
             {activeFilters > 0 && <span className="num grid size-5 place-items-center rounded-full bg-primary text-xs text-primary-foreground">{activeFilters}</span>}
           </Button>
+          <NativeSelect value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filtrer par statut" wrapperClassName="hidden w-48 sm:block">
+            <NativeSelectOption value="all">Tous les statuts</NativeSelectOption>
+            {STATUS_ORDER.map((k) => (
+              <NativeSelectOption key={k} value={k}>
+                {STATUS[k][0]}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
           {s.manager && (
             <NativeSelect value={agent} onChange={(e) => setAgent(e.target.value)} aria-label="Filtrer par agent" wrapperClassName="hidden w-56 sm:block">
               <NativeSelectOption value="">Tous les agents</NativeSelectOption>
@@ -334,7 +342,7 @@ export function Orders({ tab }: { tab: string }) {
             <span>
               Statut : <b>{STATUS[status]?.[0] || status}</b>
             </span>
-            <Button variant="ghost" size="sm" onClick={() => navigate("orders", "")}>
+            <Button variant="ghost" size="sm" onClick={() => { setStatus("all"); navigate("orders", stage === "all" ? "" : stage) }}>
               <X />
               Retirer le filtre
             </Button>
@@ -396,11 +404,16 @@ export function Orders({ tab }: { tab: string }) {
                 ))}
               </div>
             </div>
-            {status !== "all" && (
-              <p className="text-sm">
-                Statut : <b>{STATUS[status]?.[0] || status}</b>
-              </p>
-            )}
+            <FormField label="Statut" htmlFor="m-status">
+              <NativeSelect id="m-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <NativeSelectOption value="all">Tous les statuts</NativeSelectOption>
+                {STATUS_ORDER.map((k) => (
+                  <NativeSelectOption key={k} value={k}>
+                    {STATUS[k][0]}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </FormField>
           </div>
           <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <Button
@@ -409,6 +422,7 @@ export function Orders({ tab }: { tab: string }) {
               onClick={() => {
                 setAgent("")
                 setAscending(false)
+                setStatus("all")
                 if (status !== "all") navigate("orders", stage === "all" ? "" : stage)
               }}
             >
