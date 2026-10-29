@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Box, Copy, Link2, LogOut, Plus, RefreshCw, Settings, ShieldCheck, Store } from "lucide-react"
+import { Box, ChevronRight, Copy, Link2, LogOut, Plus, RefreshCw, Settings, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,6 +17,10 @@ import { SHOPIFY_LABELS, YOUCAN_LABELS, edge } from "@/lib/edge"
 import { f, time } from "@/lib/format"
 import { useSession } from "@/lib/session"
 import { supabase } from "@/lib/supabase"
+import { cn } from "@/lib/utils"
+import shopifyLogo from "@/assets/logos/shopify.webp"
+import youcanLogo from "@/assets/logos/youcan.webp"
+import wooLogo from "@/assets/logos/woocommerce.webp"
 
 type Conn = Record<string, any> | null
 type Ev = { id: number; created_at: string; external_id?: string; outcome: string; code?: string; order_id?: string; entity?: string; connection_id?: string }
@@ -35,6 +39,32 @@ const SOURCE_OUTCOME: Record<string, [string, Tone]> = {
 const WOO_OUTCOME: Record<string, [string, Tone]> = {
   imported: ["Reçue", "success"], updated: ["Mise à jour", "info"], linked: ["Rapproché", "info"], attention: ["À vérifier", "warning"],
   skipped: ["Ignorée", "neutral"], error: ["Échec", "danger"], connected: ["Connectée", "success"], disconnected: ["Déconnectée", "neutral"],
+}
+
+type Provider = "shopify" | "youcan" | "woocommerce"
+const LOGOS: Record<Provider, [string, string]> = { shopify: [shopifyLogo, "Shopify"], youcan: [youcanLogo, "YouCan"], woocommerce: [wooLogo, "WooCommerce"] }
+
+/** Provider mark as supplied by the owner (shipped with the app: the CSP allows no remote image). */
+function Logo({ p, className }: { p: Provider; className?: string }) {
+  const [src, name] = LOGOS[p]
+  return (
+    <span className={cn("grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-white", className)}>
+      <img src={src} alt={"Logo " + name} width={40} height={40} className={cn("size-full", p === "shopify" ? "object-contain p-1" : "object-cover")} />
+    </span>
+  )
+}
+
+/** « Comment ça marche » folded by default: the card itself stays short. */
+function HowItWorks({ children }: { children: ReactNode }) {
+  return (
+    <details className="group mt-4 rounded-lg border px-4 py-3 text-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+        Comment ça marche
+      </summary>
+      <div className="mt-2 grid gap-2 text-muted-foreground">{children}</div>
+    </details>
+  )
 }
 
 function Facts({ items }: { items: [string, ReactNode][] }) {
@@ -156,11 +186,11 @@ function ShopifyCard({ c, events, failed }: { c: Conn; events: Ev[]; failed: boo
   const sub = useSubmit()
   const [label, tone] = c ? SOURCE_STATES[c.status] || ["À vérifier", "warning"] : ["À connecter", "neutral"]
   return (
-    <section className="mt-5">
+    <section>
       <Card className="gap-0 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-lg bg-secondary text-secondary-foreground"><Store className="size-[18px]" aria-hidden /></span>
+            <Logo p="shopify" />
             <div>
               <h2 className="font-semibold">Shopify</h2>
               <p className="text-sm text-muted-foreground">{c ? c.external_shop : "Nouvelles commandes COD → WeConvert"}</p>
@@ -168,9 +198,9 @@ function ShopifyCard({ c, events, failed }: { c: Conn; events: Ev[]; failed: boo
           </div>
           <ToneBadge tone={tone as Tone}>{label}</ToneBadge>
         </div>
-        <p className="mt-4 text-sm">
-          Les nouvelles commandes COD en DZD arrivent dans la file de confirmation. Le statut de paiement ou d’expédition Shopify reste une information source ; seule l’équipe confirme dans WeConvert. Aucun ancien ordre n’est importé automatiquement.
-        </p>
+        <HowItWorks>
+          <p>Les nouvelles commandes COD en DZD arrivent dans la file de confirmation. Le statut de paiement ou d’expédition Shopify reste une information source ; seule l’équipe confirme dans WeConvert. Aucune ancienne commande n’est importée automatiquement.</p>
+        </HowItWorks>
         {failed && <Notice tone="danger" role="alert" className="mt-3">L’autorisation Shopify n’a pas abouti. Vérifiez l’application, ses droits de lecture et réessayez.</Notice>}
         {c?.last_error && <Notice tone="danger" role="alert" className="mt-3">Dernier problème : {SHOPIFY_LABELS[c.last_error] || c.last_error}.</Notice>}
         {c && <Facts items={[["Autorisation", time(c.connected_at)], ["Dernier webhook signé", c.last_webhook_at ? time(c.last_webhook_at) : "En attente de réception"], ["Modes COD", (c.cod_methods || []).join(", ") || "—"]]} />}
@@ -265,11 +295,11 @@ function YoucanCard({ c, events, failed }: { c: Conn; events: Ev[]; failed: bool
       location.assign(r.authorize_url)
     })
   return (
-    <section className="mt-5">
+    <section>
       <Card className="gap-0 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-lg bg-secondary text-secondary-foreground"><Store className="size-[18px]" aria-hidden /></span>
+            <Logo p="youcan" />
             <div>
               <h2 className="font-semibold">YouCan{c?.channel_name ? " · " + c.channel_name : ""}</h2>
               <p className="text-sm text-muted-foreground">{c?.public_url || "Nouvelles commandes COD → WeConvert"}</p>
@@ -277,9 +307,10 @@ function YoucanCard({ c, events, failed }: { c: Conn; events: Ev[]; failed: bool
           </div>
           <ToneBadge tone={tone as Tone}>{label}</ToneBadge>
         </div>
-        <p className="mt-4 text-sm">
-          Créez un canal avec le nom et l’URL de votre boutique, puis autorisez WeConvert sur YouCan. Les nouvelles commandes COD en DZD rejoignent la file de confirmation. Les statuts YouCan restent des informations source et aucun historique n’est importé automatiquement.
-        </p>
+        <HowItWorks>
+          <p>1. Créez un canal avec le nom et l’URL de votre boutique. 2. Autorisez WeConvert sur YouCan. 3. Passez une commande COD de test.</p>
+          <p>Les nouvelles commandes COD en DZD rejoignent la file de confirmation. Les statuts YouCan restent des informations source et aucun historique n’est importé automatiquement.</p>
+        </HowItWorks>
         {failed && <Notice tone="danger" role="alert" className="mt-3">L’autorisation YouCan n’a pas abouti. Vérifiez la boutique choisie et le dernier problème ci-dessous.</Notice>}
         {c?.last_error && <Notice tone="danger" role="alert" className="mt-3">{YOUCAN_LABELS[c.last_error] || c.last_error}</Notice>}
         {c && <Facts items={[["Boutique YouCan vérifiée", c.verified_domain || "Autorisation en attente"], ["Autorisation", time(c.connected_at)], ["Dernière commande traitée", c.last_webhook_at ? time(c.last_webhook_at) : "En attente de réception"]]} />}
@@ -428,11 +459,11 @@ function WooCard({ c, events }: { c: Conn; events: Ev[] }) {
     })
 
   return (
-    <section className="mt-5">
+    <section>
       <Card className="gap-0 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-lg bg-secondary font-bold text-secondary-foreground" aria-hidden>W</span>
+            <Logo p="woocommerce" />
             <div>
               <h2 className="font-semibold">WooCommerce</h2>
               <p className="text-sm text-muted-foreground">{connected ? c!.base_url : "Commandes COD · WooCommerce → WeConvert"}</p>
@@ -440,9 +471,11 @@ function WooCard({ c, events }: { c: Conn; events: Ev[] }) {
           </div>
           <ToneBadge tone={connected ? "success" : "neutral"}>{connected ? "Connexion active" : c ? "Déconnectée" : "À connecter"}</ToneBadge>
         </div>
-        <p className="mt-4 text-sm">
-          Connectez WooCommerce pour recevoir les nouvelles commandes à confirmer. Le statut WooCommerce décrit la commande sur le site, pas sa confirmation COD dans le CRM. La Suite peut marquer le suivi Purchase indépendamment ; synchronisez les produits ici.
-        </p>
+        <HowItWorks>
+          <p>Connectez WooCommerce pour recevoir les nouvelles commandes à confirmer. Le statut WooCommerce décrit la commande sur le site, pas sa confirmation COD dans le CRM. La Suite peut marquer le suivi Purchase indépendamment ; synchronisez les produits ici.</p>
+          <p>Les nouvelles commandes arrivent sans agent affecté. Dès qu’une fiche est travaillée, ses informations CRM sont conservées ; toute modification reçue ensuite est signalée pour vérification. Les statuts, stocks et paiements WooCommerce ne sont pas modifiés par WeConvert.</p>
+          <p>Les produits simples et les variantes vendables sont rapprochés par SKU. Le stock géré par WooCommerce est importé ; sinon le produit arrive à 0 dans le CRM. Le montant à encaisser conserve remises, taxes et frais en DZD ; les autres devises sont signalées dans le journal.</p>
+        </HowItWorks>
         {connected ? (
           <>
             <Facts items={[["API vérifiée", time(c!.last_test_at)], ["Dernier webhook signé", c!.last_webhook_at ? time(c!.last_webhook_at) : "En attente de réception"], ["Dernier import produits", time(c!.last_catalog_sync_at)]]} />
@@ -508,43 +541,35 @@ function WooCard({ c, events }: { c: Conn; events: Ev[] }) {
       {connected && !c!.catalog_done && !progress && (
         <Notice className="mt-3">Synchronisation des produits en attente : {f(c!.catalog_scanned)} fiches examinées. Vous pouvez reprendre.</Notice>
       )}
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <Card className="gap-2 p-5 sm:p-6">
-          <h3 className="font-semibold">Votre confirmation reste maîtrisée.</h3>
-          <p className="text-sm text-muted-foreground">Les nouvelles commandes arrivent sans agent affecté. Dès qu’une fiche est travaillée, ses informations CRM sont conservées ; toute modification reçue ensuite est signalée pour vérification. Les statuts, stocks et paiements WooCommerce ne sont pas modifiés par WeConvert.</p>
-        </Card>
-        <Card className="gap-2 p-5 sm:p-6">
-          <h3 className="font-semibold">Produits & montant COD</h3>
-          <p className="text-sm text-muted-foreground">Les produits simples et les variantes vendables sont rapprochés par SKU. Le stock géré par WooCommerce est importé ; sinon le produit arrive à 0 dans le CRM. Le montant à encaisser conserve remises, taxes et frais en DZD ; les autres devises sont signalées dans le journal.</p>
-        </Card>
-      </div>
-      <Journal
-        title="Journal de synchronisation WooCommerce"
-        description="Les 50 dernières opérations de cette boutique"
-        events={events}
-        labels={WOO_LABELS}
-        outcomes={WOO_OUTCOME}
-        empty={["Aucune synchronisation pour le moment", connected ? "Configurez les webhooks pour recevoir une nouvelle commande." : "Connectez WooCommerce pour commencer."]}
-        action={(e) =>
-          e.external_id && connected && e.entity !== "product" ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  const r = await edge<{ outcome: string; code?: string }>("weconvert-woocommerce", "retry", { connection_id: c!.id, external_id: Number(e.external_id) })
-                  toast(r.outcome === "error" ? WOO_LABELS[r.code || ""] || r.code : "Commande réexaminée. Consultez le journal.")
-                  await refresh()
-                } catch (err) {
-                  toast.error(safeError(err))
-                }
-              }}
-            >
-              Réessayer
-            </Button>
-          ) : null
-        }
-      />
+      {c && (
+        <Journal
+          title="Journal de synchronisation WooCommerce"
+          description="Les 50 dernières opérations de cette boutique"
+          events={events}
+          labels={WOO_LABELS}
+          outcomes={WOO_OUTCOME}
+          empty={["Aucune synchronisation pour le moment", connected ? "Configurez les webhooks pour recevoir une nouvelle commande." : "Connectez WooCommerce pour commencer."]}
+          action={(e) =>
+            e.external_id && connected && e.entity !== "product" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const r = await edge<{ outcome: string; code?: string }>("weconvert-woocommerce", "retry", { connection_id: c!.id, external_id: Number(e.external_id) })
+                    toast(r.outcome === "error" ? WOO_LABELS[r.code || ""] || r.code : "Commande réexaminée. Consultez le journal.")
+                    await refresh()
+                  } catch (err) {
+                    toast.error(safeError(err))
+                  }
+                }}
+              >
+                Réessayer
+              </Button>
+            ) : null
+          }
+        />
+      )}
 
       {dialog === "connect" && (
         <FormDialog
@@ -637,6 +662,7 @@ function WooCard({ c, events }: { c: Conn; events: Ev[] }) {
 
 export function Integrations({ tab }: { tab: string }) {
   const s = useSession()
+  const [picked, setPicked] = useState<Provider | null>(null)
   const data = useQuery({
     queryKey: ["store", s.store, "integrations"],
     enabled: !!s.store && s.manager,
@@ -664,15 +690,67 @@ export function Integrations({ tab }: { tab: string }) {
       </>
     )
   const d = data.data
+  const fromTab = (tab.replace(/-error$/, "") || null) as Provider | null
+  // Opened provider: the one clicked, else the one named by the link (#integrations/shopify), else the first connected.
+  const firstConnected: Provider | null = d ? (d.shopify ? "shopify" : d.youcan ? "youcan" : d.woo ? "woocommerce" : null) : null
+  const shown: Provider | null = picked ?? (fromTab && fromTab in LOGOS ? fromTab : firstConnected)
+  const tiles: [Provider, string, [string, Tone], boolean][] = d
+    ? [
+        ["shopify", "Boutique Shopify", d.shopify ? SOURCE_STATES[d.shopify.status] || ["À vérifier", "warning"] : ["Non connectée", "neutral"], !!d.shopify],
+        ["youcan", "Boutique YouCan", d.youcan ? SOURCE_STATES[d.youcan.status] || ["À vérifier", "warning"] : ["Non connectée", "neutral"], !!d.youcan],
+        ["woocommerce", "Site WordPress + WooCommerce", d.woo?.active ? ["Connexion active", "success"] : d.woo ? ["Déconnectée", "neutral"] : ["Non connectée", "neutral"], !!d.woo],
+      ]
+    : []
   return (
     <>
-      <PageHeader title="Vos boutiques, connectées." description="Les nouvelles commandes de chaque source arrivent dans le même espace de confirmation." />
+      <PageHeader title="Vos boutiques, connectées." description="Choisissez votre plateforme : ses nouvelles commandes arrivent directement dans la file de confirmation." />
       {data.isError && <Notice tone="danger" role="alert">{safeError(data.error)}</Notice>}
       {!d ? null : (
         <>
-          <ShopifyCard c={d.shopify} events={d.shopifyEvents} failed={tab === "shopify-error"} />
-          <YoucanCard c={d.youcan} events={d.youcanEvents} failed={tab === "youcan-error"} />
-          <WooCard c={d.woo} events={d.wooEvents} />
+          <ul className="grid gap-3 sm:grid-cols-3" aria-label="Plateformes de vente">
+            {tiles.map(([p, line, [label, tone], has]) => (
+              <li key={p}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPicked(p)
+                    // On a phone the detail opens below the tiles: bring it into view.
+                    if (matchMedia("(max-width: 639px)").matches) requestAnimationFrame(() => document.getElementById("provider-detail")?.scrollIntoView({ block: "start", behavior: "smooth" }))
+                  }}
+                  aria-pressed={shown === p}
+                  className={cn(
+                    "grid h-full w-full gap-3 rounded-xl border bg-card p-4 text-left shadow-sm outline-none transition-colors hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring",
+                    shown === p && "border-primary ring-1 ring-primary",
+                  )}
+                >
+                  <span className="flex items-center gap-3">
+                    <Logo p={p} className="size-12" />
+                    <span className="min-w-0">
+                      <b className="block font-semibold">{LOGOS[p][1]}</b>
+                      <span className="block text-sm text-muted-foreground">{line}</span>
+                    </span>
+                  </span>
+                  <span className="flex items-center justify-between gap-2">
+                    <ToneBadge tone={tone}>{label}</ToneBadge>
+                    <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
+                      {has ? "Gérer" : "Connecter"}
+                      <ChevronRight className="size-4" aria-hidden />
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div id="provider-detail" className="mt-5 scroll-mt-20">
+            {shown === "shopify" && <ShopifyCard c={d.shopify} events={d.shopifyEvents} failed={tab === "shopify-error"} />}
+            {shown === "youcan" && <YoucanCard c={d.youcan} events={d.youcanEvents} failed={tab === "youcan-error"} />}
+            {shown === "woocommerce" && <WooCard c={d.woo} events={d.wooEvents} />}
+            {!shown && (
+              <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                Sélectionnez une plateforme ci-dessus pour la connecter ou voir son état. Vous pouvez en connecter plusieurs : toutes les commandes arrivent au même endroit.
+              </p>
+            )}
+          </div>
         </>
       )}
     </>
