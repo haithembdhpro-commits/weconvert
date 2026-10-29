@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { BadgeCheck, Coins, Download, Filter, PackageCheck, Plus, ShoppingBag, Trash2 } from "lucide-react"
+import { BadgeCheck, ChevronRight, Coins, Download, Filter, PackageCheck, Plus, ShoppingBag, Trash2 } from "lucide-react"
 import { CHANNELS, csvCell, requestId } from "@domain/domain.mjs"
-import { algerToday, deliveryRate, reportBuckets, reportRange, reportRate } from "@domain/report-domain.mjs"
+import { algerToday, deliveryRate, periodDelta, previousRange, reportBuckets, reportRange, reportRate } from "@domain/report-domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EmptyState, FormError, FormField, Loading, Notice, PageHeader, Pager } from "@/components/app/page"
 import { FormDialog } from "@/components/app/FormDialog"
 import { type Tone } from "@/components/app/tone"
@@ -15,6 +16,7 @@ import { useOrderUI } from "@/components/app/orders"
 import { useSubmit } from "@/components/app/useSubmit"
 import { rpc, safeError, select } from "@/lib/api"
 import { f, money } from "@/lib/format"
+import { navigate } from "@/lib/router"
 import { useSession } from "@/lib/session"
 import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
@@ -101,18 +103,41 @@ function StatusBars({ s }: { s: Row }) {
   )
 }
 
-export function Performance() {
+// Report parts: one screen each, so a question has one place to look. Deep link: #performance/<part>.
+const TABS: [string, string, boolean][] = [
+  ["overview", "Vue d’ensemble", false],
+  ["losses", "Pertes", false],
+  ["wilayas", "Wilayas", false],
+  ["team", "Équipe & horaires", false],
+  ["products", "Produits & canaux", false],
+  ["money", "Marge & dépenses", true],
+]
+
+/** « ▲ +12 % vs 7 j avant » — direction in words and arrow, never colour alone. */
+function Trend({ d }: { d: { value: number; text: string } | null }) {
+  if (!d) return <span className="block text-muted-foreground">Pas de comparaison possible</span>
+  const up = d.value > 0.05, down = d.value < -0.05
+  return (
+    <span className={cn("block font-medium", up ? "text-success" : down ? "text-danger" : "text-muted-foreground")}>
+      <span aria-hidden>{up ? "▲" : down ? "▼" : "■"}</span> {d.text} <span className="font-normal text-muted-foreground">vs période d’avant</span>
+    </span>
+  )
+}
+
+export function Performance({ tab: rawTab = "" }: { tab?: string }) {
   const s = useSession()
   const qc = useQueryClient()
   const ui = useOrderUI()
   const [fl, setFl] = useState<Filters>({ preset: "30", from: "", to: "", channel: "", agent: "" })
   const [filterError, setFilterError] = useState("")
+  const [customOpen, setCustomOpen] = useState(false)
   const [deliveredPage, setDeliveredPage] = useState(1)
   const [delExpense, setDelExpense] = useState<Row | null>(null)
   const expenseSub = useSubmit()
   const delSub = useSubmit()
   const [expenseKey, setExpenseKey] = useState(() => requestId())
   const p = range(fl)
+  const prev = previousRange(p.from, p.to)
   const agent = s.manager ? fl.agent || null : null
   const channel = fl.channel || null
   const base = ["store", s.store, "perf", p.from, p.to, channel, agent] as const
@@ -122,6 +147,13 @@ export function Performance() {
     enabled: !!s.store,
     placeholderData: keepPreviousData,
     queryFn: () => rpc<Report>("crm_performance", { p_store: s.store, p_from: p.from, p_to: p.to, p_agent: agent, p_channel: channel }),
+  })
+  const tab = TABS.some(([id, , manager]) => id === rawTab && (!manager || s.manager)) ? rawTab : "overview"
+  const prevInsights = useQuery({
+    queryKey: [...base, "insights-prev"],
+    enabled: !!s.store && prev.from >= "2000-01-01",
+    placeholderData: keepPreviousData,
+    queryFn: () => rpc<Insights>("crm_report_insights", { p_store: s.store, p_from: prev.from, p_to: prev.to, p_agent: agent, p_channel: channel }),
   })
   const insights = useQuery({
     queryKey: [...base, "insights"],
@@ -152,7 +184,7 @@ export function Performance() {
   const sm = r?.summary || {}
   const x = insights.data
   const fu = x?.funnel
-  const label = r ? `${shortDate(r.period.from)} – ${shortDate(r.period.to)}` : ""
+  const pf = prevInsights.data?.funnel
   const today = algerToday()
 
   function setPreset(id: string) {
@@ -202,10 +234,14 @@ export function Performance() {
     toast.success("Rapport CSV exporté pour la période sélectionnée.")
   }
 
+  // The delivered-orders list lives in « Marge & dépenses »: open that part, then bring the list into view.
   const scrollToDelivered = () => {
-    const el = document.getElementById("delivered-period-title")
-    el?.scrollIntoView({ block: "start", behavior: "smooth" })
-    el?.focus({ preventScroll: true })
+    navigate("performance", "money")
+    setTimeout(() => {
+      const el = document.getElementById("delivered-period-title")
+      el?.scrollIntoView({ block: "start", behavior: "smooth" })
+      el?.focus({ preventScroll: true })
+    }, 60)
   }
 
   const legacy = (Number(sm.woo_confirmation_unverified) || 0) + (Number(sm.woo_cancellation_unverified) || 0)
@@ -216,64 +252,66 @@ export function Performance() {
     <>
       <PageHeader
         title="Performance & rapports."
-        description="L’activité réelle de vos commandes COD, de la réception à la livraison."
-        actions={r && <Button variant="outline" onClick={exportCsv}><Download />Exporter le rapport CSV</Button>}
+        description="Ce que deviennent vos commandes, de la réception à la livraison."
+        actions={r && <Button variant="outline" onClick={exportCsv}><Download />Exporter en CSV</Button>}
       />
-      <Card className="gap-4 p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold">Filtres du rapport</h2>
-            <p className="text-sm text-muted-foreground">Période selon la création des commandes · états CRM et ZR actuels · heure d’Alger.</p>
-          </div>
-          <div role="group" aria-label="Périodes rapides" className="flex flex-wrap gap-1.5">
-            {PRESETS.map(([id, l]) => (
-              <Button key={id} size="sm" variant={fl.preset === id ? "default" : "outline"} aria-pressed={fl.preset === id} onClick={() => setPreset(id)}>{l}</Button>
+      <div className="-mx-4 mb-5 grid gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:sticky lg:top-14 lg:z-10 lg:-mx-8 lg:px-8">
+        <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+          <div role="group" aria-label="Période" className="col-span-2 flex overflow-x-auto rounded-lg border bg-card p-1 sm:inline-flex">
+            {[...PRESETS, ["custom", "Dates…"] as [string, string]].map(([id, l]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={id === "custom" ? fl.preset === "custom" || customOpen : fl.preset === id && !customOpen}
+                onClick={() => (id === "custom" ? setCustomOpen((o) => !o) : (setCustomOpen(false), setPreset(id)))}
+                className={cn(
+                  "num min-h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring coarse:min-h-11",
+                  (id === "custom" ? fl.preset === "custom" || customOpen : fl.preset === id && !customOpen) ? "bg-secondary font-medium text-secondary-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {l}
+              </button>
             ))}
           </div>
+          <NativeSelect value={fl.channel} onChange={(e) => { setDeliveredPage(1); setFl((v) => ({ ...v, channel: e.target.value })) }} aria-label="Canal" wrapperClassName="w-full sm:w-44">
+            <NativeSelectOption value="">Tous les canaux</NativeSelectOption>
+            {Object.entries(CHANNELS).map(([k, v]) => <NativeSelectOption key={k} value={k}>{v}</NativeSelectOption>)}
+          </NativeSelect>
+          {s.manager && (
+            <NativeSelect value={fl.agent} onChange={(e) => { setDeliveredPage(1); setFl((v) => ({ ...v, agent: e.target.value })) }} aria-label="Agent" wrapperClassName="w-full sm:w-48">
+              <NativeSelectOption value="">Tous les agents</NativeSelectOption>
+              {s.members.map((m) => <NativeSelectOption key={m.user_id} value={m.user_id}>{m.display_name + (m.active ? "" : " · inactif")}</NativeSelectOption>)}
+            </NativeSelect>
+          )}
+          <span className="num col-span-2 text-xs text-muted-foreground sm:ml-auto sm:text-sm">
+            Du {shortDate(p.from)} au {shortDate(p.to)} · comparé aux {f(prev.days)} jours d’avant
+          </span>
         </div>
-        <form
-          key={fl.preset + p.from + p.to}
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const v = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>
-            try {
-              validate(v.from, v.to)
-              if (v.channel && !Object.hasOwn(CHANNELS, v.channel)) throw Error("INVALID_FILTER")
-              if (v.agent && (!s.manager || !s.members.some((m) => m.user_id === v.agent))) throw Error("INVALID_FILTER")
-              setFilterError("")
-              setDeliveredPage(1)
-              setFl({ preset: "custom", from: v.from, to: v.to, channel: v.channel || "", agent: s.manager ? v.agent || "" : "" })
-            } catch (err) {
-              setFilterError(safeError(err))
-            }
-          }}
-        >
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {customOpen && (
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const v = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>
+              try {
+                validate(v.from, v.to)
+                setFilterError("")
+                setDeliveredPage(1)
+                setCustomOpen(false)
+                setFl((x) => ({ ...x, preset: "custom", from: v.from, to: v.to }))
+              } catch (err) {
+                setFilterError(safeError(err))
+              }
+            }}
+          >
             <FormField label="Du" htmlFor="pf-from" required><Input id="pf-from" name="from" type="date" defaultValue={p.from} min="2000-01-01" max={today} required /></FormField>
             <FormField label="Au (inclus)" htmlFor="pf-to" required><Input id="pf-to" name="to" type="date" defaultValue={p.to} min="2000-01-01" max={today} required /></FormField>
-            <FormField label="Canal" htmlFor="pf-channel">
-              <NativeSelect id="pf-channel" name="channel" defaultValue={fl.channel}>
-                <NativeSelectOption value="">Tous les canaux</NativeSelectOption>
-                {Object.entries(CHANNELS).map(([k, v]) => <NativeSelectOption key={k} value={k}>{v}</NativeSelectOption>)}
-              </NativeSelect>
-            </FormField>
-            {s.manager && (
-              <FormField label="Agent" htmlFor="pf-agent">
-                <NativeSelect id="pf-agent" name="agent" defaultValue={fl.agent}>
-                  <NativeSelectOption value="">Tous les agents</NativeSelectOption>
-                  {s.members.map((m) => <NativeSelectOption key={m.user_id} value={m.user_id}>{m.display_name + (m.active ? "" : " · inactif")}</NativeSelectOption>)}
-                </NativeSelect>
-              </FormField>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit"><Filter />Appliquer les filtres</Button>
-            <span className="text-xs text-muted-foreground">Jusqu’à 366 jours par rapport · données de la boutique sélectionnée.</span>
-          </div>
-          <FormError message={filterError} />
-        </form>
-      </Card>
+            <Button type="submit"><Filter />Afficher</Button>
+            <span className="text-xs text-muted-foreground">366 jours maximum.</span>
+            <FormError message={filterError} />
+          </form>
+        )}
+      </div>
 
       {report.isError ? (
         <Notice tone="danger" role="alert" className="mt-5">{safeError(report.error)}</Notice>
@@ -281,106 +319,121 @@ export function Performance() {
         <Loading text="Calcul du rapport…" />
       ) : (
         <>
-          <Card className="mt-5 grid gap-px overflow-hidden bg-border py-0 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi label="Commandes reçues" value={f(sm.orders)} foot={"Créées du " + label} icon={ShoppingBag} />
-            <Kpi label="Taux de confirmation" value={reportRate(sm.confirmed, sm.rate_base ?? sm.orders)} foot={`${f(sm.confirmed)} confirmées sur ${f(sm.rate_base ?? sm.orders)} commandes (hors anciens statuts Woo)`} icon={BadgeCheck} />
-            <Kpi
-              label="Taux de livraison"
-              value={fu ? deliveryRate(fu.delivered, fu.returned) : insights.isError ? "—" : "…"}
-              foot={fu ? `${f(fu.delivered)} livrées sur ${f(Number(fu.delivered || 0) + Number(fu.returned || 0))} colis arrivés au bout${Number(fu.in_progress) ? " · " + f(fu.in_progress) + " en route" : ""}` : "Livrées ÷ (livrées + retournées)"}
-              icon={PackageCheck}
-            />
-            <Kpi
-              label="COD livré"
-              value={fu ? money(fu.delivered_cod) : insights.isError ? "—" : "…"}
-              foot={s.manager ? "Montant des colis livrés · reversement ZR non vérifié · voir la liste" : "Montant de vos colis livrés · reversement ZR non vérifié"}
-              icon={Coins}
-              onClick={s.manager ? scrollToDelivered : undefined}
-            />
-          </Card>
-          {legacy > 0 && (
-            <Notice tone="warning" className="mt-4">
-              {f(legacy)} anciennes commandes portent un statut « confirmé » ou « annulé » venu de WooCommerce, sans appel vérifié. Elles restent consultables, mais ne comptent ni dans les confirmations, ni dans les annulations, ni dans les montants.
-            </Notice>
-          )}
-          {Number(sm.woo_orders) > 0 && (
-            <Notice className="mt-4">
-              Suivi WooCommerce : {f(sm.woo_purchase_marked)} commandes sur {f(sm.woo_orders)} ont un Purchase CAPI marqué envoyé par la Suite WeConvert. Les {f(sm.woo_unverified)} autres sont bien comptées ici, mais ne doivent pas être comparées aux achats affichés par Meta.
-            </Notice>
-          )}
+          <Tabs value={tab} onValueChange={(v) => navigate("performance", v === "overview" ? "" : v)}>
+            <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+              <TabsList aria-label="Parties du rapport">
+                {TABS.filter(([, , manager]) => !manager || s.manager).map(([id, l]) => (
+                  <TabsTrigger key={id} value={id} className="px-3">{l}</TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
-          <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5">
-            {insights.isError ? (
-              <Notice tone="danger" role="alert">Analyse détaillée indisponible : {safeError(insights.error)}</Notice>
-            ) : !x ? (
-              <Loading text="Analyse du parcours des commandes…" />
-            ) : (
-              <>
-                <Journey x={x} />
-                <Alerts x={x} />
-              </>
-            )}
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <Card className="gap-0 p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-2">
+            <TabsContent value="overview" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-5">
+              <Card className="grid gap-px overflow-hidden bg-border py-0 sm:grid-cols-2 xl:grid-cols-4">
+                <Kpi label="Commandes reçues" value={fu ? f(fu.received) : f(sm.orders)} foot={<Trend d={periodDelta("count", fu?.received, pf?.received)} />} icon={ShoppingBag} />
+                <Kpi
+                  label="Taux de confirmation"
+                  value={fu ? reportRate(fu.confirmed, fu.rate_base) : reportRate(sm.confirmed, sm.rate_base ?? sm.orders)}
+                  foot={<><span className="block">{f(fu?.confirmed ?? sm.confirmed)} confirmées sur {f(fu?.rate_base ?? sm.rate_base)}</span><Trend d={periodDelta("rate", fu?.confirmed, pf?.confirmed, fu?.rate_base, pf?.rate_base)} /></>}
+                  icon={BadgeCheck}
+                />
+                <Kpi
+                  label="Taux de livraison"
+                  value={fu ? deliveryRate(fu.delivered, fu.returned) : insights.isError ? "—" : "…"}
+                  foot={fu ? <><span className="block">{f(fu.delivered)} livrées sur {f(Number(fu.delivered || 0) + Number(fu.returned || 0))} colis arrivés{Number(fu.in_progress) ? " · " + f(fu.in_progress) + " en route" : ""}</span><Trend d={periodDelta("rate", fu.delivered, pf?.delivered, Number(fu.delivered || 0) + Number(fu.returned || 0), Number(pf?.delivered || 0) + Number(pf?.returned || 0))} /></> : "Livrées ÷ (livrées + retournées)"}
+                  icon={PackageCheck}
+                />
+                <Kpi
+                  label="COD livré"
+                  value={fu ? money(fu.delivered_cod) : insights.isError ? "—" : "…"}
+                  foot={<><span className="block">Colis livrés · argent pas encore vérifié</span><Trend d={periodDelta("count", fu?.delivered_cod, pf?.delivered_cod)} /></>}
+                  icon={Coins}
+                  onClick={s.manager ? () => scrollToDelivered() : undefined}
+                />
+              </Card>
+              {legacy > 0 && (
+                <Notice tone="warning">
+                  {f(legacy)} anciennes commandes ont un statut « confirmé » ou « annulé » venu de WooCommerce, sans appel vérifié : elles ne comptent pas dans ces chiffres.
+                </Notice>
+              )}
+              {insights.isError ? (
+                <Notice tone="danger" role="alert">Analyse détaillée indisponible : {safeError(insights.error)}</Notice>
+              ) : !x ? (
+                <Loading text="Analyse du parcours des commandes…" />
+              ) : (
+                <>
+                  <Alerts x={x} />
+                  <Journey x={x} />
+                </>
+              )}
+              <Card className="gap-0 p-5 sm:p-6">
                 <div>
                   <h2 className="font-semibold">Évolution des commandes</h2>
-                  <p className="text-sm text-muted-foreground">Jour de création · statut actuel de chaque commande</p>
+                  <p className="text-sm text-muted-foreground">Par jour de création{(r.days || []).length > 31 ? " (regroupées par semaine ou par mois)" : ""}</p>
                 </div>
-                <span className="num rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">{label}</span>
-              </div>
-              <div className="mt-3 mb-4 flex gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-chart-2" aria-hidden />Reçues</span>
-                <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-chart-1" aria-hidden />Confirmées</span>
-              </div>
-              <Chart days={r.days || []} />
-            </Card>
-            <Card className="gap-4 p-5 sm:p-6">
-              <div>
-                <h2 className="font-semibold">Répartition des statuts</h2>
-                <p className="text-sm text-muted-foreground">Sur {f(sm.orders)} commandes créées dans la période</p>
-              </div>
-              <StatusBars s={sm} />
-              <p className="text-xs text-muted-foreground">Les confirmations et annulations historiques déduites de WooCommerce sont exclues. Les statuts affichés sont ceux d’aujourd’hui ; confirmé ne signifie pas livré.</p>
-            </Card>
-          </div>
+                <div className="mt-3 mb-4 flex gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-chart-2" aria-hidden />Reçues</span>
+                  <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-chart-1" aria-hidden />Confirmées</span>
+                </div>
+                <Chart days={r.days || []} />
+              </Card>
+              <details className="group rounded-lg border bg-card px-4 py-3 text-sm">
+                <summary className="flex cursor-pointer list-none items-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+                  Comment lire ce rapport
+                </summary>
+                <ul className="mt-2 grid list-disc gap-1 pl-9 text-muted-foreground">
+                  <li>On suit les commandes <b className="text-foreground">créées</b> pendant la période, jusqu’à aujourd’hui : une commande du 3 livrée le 10 compte dans la période qui contient le 3.</li>
+                  <li>Confirmée ne veut pas dire livrée ; livrée chez ZR ne veut pas dire argent reçu.</li>
+                  <li>Les flèches comparent à la période de même durée juste avant.</li>
+                  <li>Les anciens statuts déduits de WooCommerce ne comptent ni comme confirmés ni comme annulés.</li>
+                  {Number(sm.woo_orders) > 0 && <li>Suivi WooCommerce : {f(sm.woo_purchase_marked)} commandes sur {f(sm.woo_orders)} ont un Purchase CAPI marqué envoyé par la Suite ; ne comparez pas les autres aux achats Meta.</li>}
+                </ul>
+              </details>
+            </TabsContent>
 
-            {x && (
-              <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
-                <LostReasons x={x} />
-                <Section title="Par canal" description="Site web, WhatsApp, Messenger, Instagram, téléphone et saisie manuelle">
-                  <DataTable head={["Canal", "Reçues", "Confirmées", "Taux", "Montant COD confirmé"]} right={[1, 2, 3, 4]} empty="Les commandes par message apparaîtront selon leur canal de saisie."
-                    rows={(r.channels || []).map((c) => [CHANNELS[c.channel] || c.channel, f(c.orders), f(c.confirmed), reportRate(c.confirmed, c.rate_base ?? c.orders), money(c.confirmed_amount)])} />
-                </Section>
-              </div>
-            )}
-            {x && <Wilayas x={x} />}
-            {x && <Agents x={x} />}
-            <Section title="Par produit" description="Articles des commandes, variantes comprises · montant des lignes hors frais de livraison">
-              <DataTable head={["Produit", "Unités commandées", "Unités confirmées", "Lignes confirmées"]} right={[1, 2, 3]} empty="Aucun produit dans cette sélection."
-                rows={(r.products || []).map((c) => [<>{c.name}<span className="block text-xs font-normal text-muted-foreground">{c.sku}</span></>, f(c.units), f(c.confirmed_units), money(c.confirmed_lines_amount)])} />
-            </Section>
-            {x && <BasketAndHours x={x} />}
-            <Notice>
-              Comment lire ce rapport : toutes les commandes créées pendant la période sont suivies jusqu’à aujourd’hui. Une commande créée le 3 et livrée le 10 compte dans la période qui contient le 3. Confirmée ne veut pas dire livrée, et livrée chez ZR ne veut pas dire argent reçu.
-            </Notice>
-          </div>
+            <TabsContent value="losses" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              {x ? <LostReasons x={x} /> : <Loading />}
+              <Card className="gap-4 self-start p-5 sm:p-6">
+                <div>
+                  <h2 className="font-semibold">Où en sont les commandes</h2>
+                  <p className="text-sm text-muted-foreground">Statut d’aujourd’hui des {f(sm.orders)} commandes de la période</p>
+                </div>
+                <StatusBars s={sm} />
+              </Card>
+            </TabsContent>
 
-          {s.manager &&
-            (fl.agent ? (
-              <Card className="mt-5 gap-2 p-5 sm:p-6">
+            <TabsContent value="wilayas" className="mt-4">{x ? <Wilayas x={x} /> : <Loading />}</TabsContent>
+
+            <TabsContent value="team" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-5">{x ? <><Agents x={x} /><BasketAndHours x={x} /></> : <Loading />}</TabsContent>
+
+            <TabsContent value="products" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+              <Section title="Par produit" description="Montant des lignes, hors frais de livraison">
+                <DataTable head={["Produit", "Commandées", "Confirmées", "Montant confirmé"]} right={[1, 2, 3]} empty="Aucun produit dans cette sélection."
+                  rows={(r.products || []).map((c) => [<>{c.name}<span className="block text-xs font-normal text-muted-foreground">{c.sku}</span></>, f(c.units), f(c.confirmed_units), money(c.confirmed_lines_amount)])} />
+              </Section>
+              <Section title="Par canal" description="Site web, WhatsApp, Messenger, Instagram, téléphone et saisie manuelle">
+                <DataTable head={["Canal", "Reçues", "Confirmées", "Taux", "Montant confirmé"]} right={[1, 2, 3, 4]} empty="Les commandes par message apparaîtront selon leur canal de saisie."
+                  rows={(r.channels || []).map((c) => [CHANNELS[c.channel] || c.channel, f(c.orders), f(c.confirmed), reportRate(c.confirmed, c.rate_base ?? c.orders), money(c.confirmed_amount)])} />
+              </Section>
+            </TabsContent>
+
+            {s.manager && (
+              <TabsContent value="money" className="mt-4">
+          {fl.agent ? (
+              <Card className="gap-2 p-5 sm:p-6">
                 <h2 className="font-semibold">Livraison & marge COD</h2>
                 <p className="text-sm text-muted-foreground">Ce rapport de livraison est calculé pour toute la boutique. Choisissez « Tous les agents » pour voir des chiffres cohérents avec les filtres.</p>
               </Card>
             ) : (
-              <section className="mt-5 grid gap-5">
+              <section className="grid gap-5">
                 <Card className="gap-4 p-5 sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="font-semibold">Livraison & marge COD</h2>
                       <p className="text-sm text-muted-foreground">Ce qu’il reste après le coût des produits, les frais ZR et vos dépenses saisies.</p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={scrollToDelivered}>Voir les commandes livrées</Button>
+                    <Button variant="outline" size="sm" onClick={() => scrollToDelivered()}>Voir les commandes livrées</Button>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-lg bg-muted p-4">
@@ -479,7 +532,10 @@ export function Performance() {
                   />
                 </Section>
               </section>
-            ))}
+            )}
+              </TabsContent>
+            )}
+          </Tabs>
         </>
       )}
 

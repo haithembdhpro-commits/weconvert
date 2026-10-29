@@ -45,3 +45,15 @@ test('alerts need enough data and use the market reference points',async()=>{
  assert.match(a[3].detail,/31 - Oran/);
  assert.doesNotMatch(a[3].detail,/Alger/);
 });
+
+test('previous period and deltas compare like with like',async()=>{
+ const {previousRange,periodDelta}=await import('../src/domain/report-domain.mjs');
+ assert.deepEqual(previousRange('2026-10-23','2026-10-29'),{from:'2026-10-16',to:'2026-10-22',days:7});
+ assert.deepEqual(previousRange('2026-03-01','2026-03-01'),{from:'2026-02-28',to:'2026-02-28',days:1});
+ assert.equal(periodDelta('count',120,100).text,'+20 %');
+ assert.equal(periodDelta('count',80,100).text,'-20 %');
+ assert.equal(periodDelta('count',5,0).text,'nouveau');
+ assert.equal(periodDelta('count',0,0),null);
+ assert.equal(periodDelta('rate',70,60,100,100).text,'+10,0 pt');
+ assert.equal(periodDelta('rate',1,1,0,10),null);
+});

@@ -23,7 +23,7 @@ function Page({ route, tab }: { route: string; tab: string }) {
     case "products": return <Products />
     case "team": return <Team tab={tab} />
     case "settings": return <Settings />
-    case "performance": return <Performance />
+    case "performance": return <Performance tab={tab} />
     case "shipping": return <Shipping />
     case "integrations": return <Integrations tab={tab} />
     default: return <Planned route={route} />

@@ -19,6 +19,8 @@ declare module "@domain/report-domain.mjs" {
   export function deliveryRate(delivered: unknown, returned: unknown): string
   export function minutesLabel(minutes: unknown): string
   export function sortWilayas<T extends Record<string, any>>(rows: T[], mode?: string, marks?: typeof REPORT_MARKS): T[]
+  export function previousRange(from: string, to: string): { from: string; to: string; days: number }
+  export function periodDelta(kind: "count" | "rate", now: unknown, before: unknown, nowBase?: unknown, beforeBase?: unknown): { value: number; text: string } | null
   export function reportAlerts(insights: unknown, marks?: typeof REPORT_MARKS): { key: string; tone: "warning" | "danger"; title: string; detail: string }[]
 }
 declare module "@domain/live-sync.mjs" {

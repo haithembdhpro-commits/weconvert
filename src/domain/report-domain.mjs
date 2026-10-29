@@ -79,3 +79,26 @@ export function reportAlerts(x,marks=REPORT_MARKS){
   detail:bad.slice(0,4).map(w=>w.wilaya+' ('+reportRate(w.returned,Number(w.delivered||0)+Number(w.returned||0))+')').join(' · ')+(bad.length>4?' et '+(bad.length-4)+' autres':'')+'. À vérifier avant d’y dépenser en publicité.'});
  return out;
 }
+
+/** Same-length window right before [from, to] (both inclusive, YYYY-MM-DD). */
+export function previousRange(from,to){
+ const a=Date.parse(from+'T00:00:00Z'),b=Date.parse(to+'T00:00:00Z'),days=Math.round((b-a)/864e5)+1;
+ const pt=new Date(a-864e5),pf=new Date(a-days*864e5);
+ return {from:pf.toISOString().slice(0,10),to:pt.toISOString().slice(0,10),days};
+}
+
+/**
+ * Change versus the previous period, in plain words. 'count': relative change in %;
+ * 'rate': difference in points between two rates n/base. Returns null when the comparison means nothing.
+ */
+export function periodDelta(kind,now,before,nowBase,beforeBase){
+ if(kind==='rate'){
+  if(!(Number(nowBase)>0)||!(Number(beforeBase)>0))return null;
+  const d=100*Number(now||0)/Number(nowBase)-100*Number(before||0)/Number(beforeBase);
+  return {value:d,text:(d>0?'+':'')+d.toFixed(1).replace('.',',')+' pt'};
+ }
+ const n=Number(now||0),b=Number(before||0);
+ if(!b)return n?{value:Infinity,text:'nouveau'}:null;
+ const d=100*(n-b)/b;
+ return {value:d,text:(d>0?'+':'')+d.toFixed(0)+' %'};
+}

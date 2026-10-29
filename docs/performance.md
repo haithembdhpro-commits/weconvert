@@ -44,3 +44,9 @@ Fonction `crm_report_insights` (migration `20261029120000_report_insights.sql`, 
 | Panier et heures | Panier moyen des confirmées, articles par commande, % à plusieurs articles, % traitées en 30 min, délai de livraison médian ; commandes par heure (heure d'Alger) pour planifier l'équipe d'appel. |
 
 Le CSV exporte aussi le parcours, les wilayas, les motifs, les agents et le panier. Test SQL : `tests/insights.sql` (2 entreprises, 2 boutiques, propriétaire / agent / autre entreprise).
+
+## Organisation de la page (29/10/2026, audit UX)
+- **Barre de filtres compacte** (collée en haut sur ordinateur) : 7 j / 30 j / 90 j / 12 mois / Dates…, canal et agent appliqués immédiatement, rappel de la période et de la comparaison.
+- **Six onglets**, un sujet par écran, avec lien direct `#performance/<onglet>` : Vue d'ensemble (`overview`), Pertes (`losses`), Wilayas (`wilayas`), Équipe & horaires (`team`), Produits & canaux (`products`), Marge & dépenses (`money`, responsables).
+- **Vue d'ensemble** : 4 chiffres clés avec la variation par rapport à la période de même durée juste avant (`previousRange`, `periodDelta`, flèche + texte, jamais la couleur seule), puis « À surveiller », le parcours, l'évolution et « Comment lire ce rapport » replié.
+- Les longues explications sont repliées ; « COD livré » ouvre la liste des commandes livrées dans Marge & dépenses.
