@@ -4,7 +4,6 @@ import {
   Archive, BarChart3, Bolt, Box, ChevronDown, ChevronRight, LayoutGrid, Link2, LineChart, Menu, MessageSquare,
   Moon, Phone, RefreshCw, Search, Settings, Shield, ShoppingBag, Store, Sun, Truck, Undo2, Users, Wallet, Zap,
 } from "lucide-react"
-import { initialsOf } from "@domain/domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -12,6 +11,7 @@ import { BrandMark } from "@/components/app/tone"
 import { FormError } from "@/components/app/page"
 import { CommandMenu, useCommandShortcut } from "@/components/app/command-menu"
 import { Notifications } from "@/components/app/notifications"
+import { AccountMenu } from "@/components/app/account-menu"
 import { useOverview } from "@/lib/queries"
 import { useLiveSync, useOnline } from "@/lib/live"
 import type { RouteState } from "@/lib/router"
@@ -58,16 +58,6 @@ function NavLink({ item: [id, label, Icon], route, count, onNavigate, muted }: {
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 
-const ROLE_LABEL = { owner: "Propriétaire", admin: "Administrateur", agent: "Agent de confirmation" } as const
-
-function Avatar({ name, className }: { name: string; className?: string }) {
-  return (
-    <span aria-hidden className={cn("grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground", className)}>
-      {initialsOf(name)}
-    </span>
-  )
-}
-
 function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () => void }) {
   const s = useSession()
   const overview = useOverview().data
@@ -80,7 +70,6 @@ function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () 
       return false
     }
   })
-  const me = s.members.find((m) => m.user_id === s.user?.id)
   return (
     <div className="flex h-full flex-col gap-2 p-3">
       <a href="#dashboard" onClick={onNavigate} className="flex items-center gap-3 rounded-lg px-2 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -138,13 +127,7 @@ function SidebarContent({ route, onNavigate }: { route: string; onNavigate?: () 
           ))}
         </details>
       </nav>
-      <a href="#settings" onClick={onNavigate} className="flex min-h-11 coarse:min-h-12 items-center gap-3 rounded-lg border px-3 py-2 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
-        <Avatar name={me?.display_name || s.user?.email || "?"} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">{me?.display_name || s.user?.email}</span>
-          <span className="block truncate text-xs text-muted-foreground">{s.role ? ROLE_LABEL[s.role] : ""}</span>
-        </span>
-      </a>
+      <AccountMenu variant="sidebar" onNavigate={onNavigate} />
       <StoreSwitcher open={storeOpen} onOpenChange={setStoreOpen} />
     </div>
   )
@@ -271,7 +254,6 @@ export function AppShell({ route, children }: { route: RouteState; children: Rea
   const [search, setSearch] = useState(false)
   const openSearch = useCallback(() => setSearch(true), [])
   useCommandShortcut(openSearch)
-  const me = s.members.find((m) => m.user_id === s.user?.id)
 
   return (
     <div className="min-h-dvh bg-background lg:grid lg:grid-cols-[272px_minmax(0,1fr)]">
@@ -317,7 +299,7 @@ export function AppShell({ route, children }: { route: RouteState; children: Rea
             <Button variant="ghost" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["store", s.store] })} aria-label="Actualiser les données">
               <RefreshCw />
             </Button>
-            <Avatar name={me?.display_name || s.user?.email || "?"} className="hidden sm:grid" />
+            <AccountMenu onSearch={openSearch} />
           </div>
         </header>
         <CommandMenu open={search} onOpenChange={setSearch} />
