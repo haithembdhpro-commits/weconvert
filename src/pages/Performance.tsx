@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState } from "react"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { BadgeCheck, Coins, Download, Filter, Plus, ShoppingBag, Trash2, Truck, Undo2 } from "lucide-react"
+import { BadgeCheck, Coins, Download, Filter, PackageCheck, Plus, ShoppingBag, Trash2 } from "lucide-react"
 import { CHANNELS, csvCell, requestId } from "@domain/domain.mjs"
-import { algerToday, reportBuckets, reportRange, reportRate } from "@domain/report-domain.mjs"
+import { algerToday, deliveryRate, reportBuckets, reportRange, reportRate } from "@domain/report-domain.mjs"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, FormError, FormField, Loading, Notice, PageHeader, Pager } from "@/components/app/page"
 import { FormDialog } from "@/components/app/FormDialog"
 import { type Tone } from "@/components/app/tone"
@@ -20,6 +19,7 @@ import { useSession } from "@/lib/session"
 import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { ZrBadge } from "./Shipping"
+import { Agents, Alerts, BasketAndHours, DataTable, Journey, Kpi, LostReasons, Section, Wilayas, type Insights } from "./report-parts"
 
 type Row = Record<string, any>
 type Report = { period: { from: string; to: string }; summary: Row; days: Row[]; channels: Row[]; wilayas: Row[]; products: Row[]; agents: Row[] }
@@ -40,54 +40,6 @@ function validate(from: string, to: string) {
     new Date(a).toISOString().slice(0, 10) === from && new Date(b).toISOString().slice(0, 10) === to &&
     from >= "2000-01-01" && to <= today && from <= to && (b - a) / 86400000 <= 365
   if (!ok) throw Error("INVALID_FILTER")
-}
-
-function Kpi({ label, value, foot, icon: Icon, onClick }: { label: string; value: string; foot: ReactNode; icon: typeof Coins; onClick?: () => void }) {
-  const Tag = onClick ? "button" : "div"
-  return (
-    <Tag
-      {...(onClick ? { type: "button" as const, onClick } : {})}
-      className={cn("grid min-w-0 gap-1 bg-card p-5 text-left", onClick && "outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset")}
-    >
-      <span className="flex items-center gap-2 text-sm text-muted-foreground"><Icon className="size-4" aria-hidden />{label}</span>
-      <span className="num text-[1.75rem] font-semibold tracking-tight">{value}</span>
-      <span className="text-[0.8125rem] leading-snug text-muted-foreground">{foot}</span>
-    </Tag>
-  )
-}
-
-function DataTable({ head, rows, empty, right = [] }: { head: string[]; rows: ReactNode[][]; empty: string; right?: number[] }) {
-  if (!rows.length) return <EmptyState title="Aucune donnée pour ce filtre" description={empty} />
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/60 hover:bg-muted/60">
-            {head.map((h, i) => <TableHead key={h} className={right.includes(i) ? "text-right" : undefined}>{h}</TableHead>)}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r, i) => (
-            <TableRow key={i}>
-              {r.map((c, j) => <TableCell key={j} className={cn(j === 0 ? "font-medium" : "num", right.includes(j) && "text-right")}>{c}</TableCell>)}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  )
-}
-
-function Section({ title, description, children, className }: { title: string; description?: string; children: ReactNode; className?: string }) {
-  return (
-    <Card className={cn("gap-0 overflow-hidden py-0", className)}>
-      <div className="border-b p-4 sm:px-6">
-        <h2 className="font-semibold">{title}</h2>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
-      </div>
-      {children}
-    </Card>
-  )
 }
 
 function Chart({ days }: { days: Row[] }) {
@@ -171,6 +123,12 @@ export function Performance() {
     placeholderData: keepPreviousData,
     queryFn: () => rpc<Report>("crm_performance", { p_store: s.store, p_from: p.from, p_to: p.to, p_agent: agent, p_channel: channel }),
   })
+  const insights = useQuery({
+    queryKey: [...base, "insights"],
+    enabled: !!s.store,
+    placeholderData: keepPreviousData,
+    queryFn: () => rpc<Insights>("crm_report_insights", { p_store: s.store, p_from: p.from, p_to: p.to, p_agent: agent, p_channel: channel }),
+  })
   const delivery = useQuery({
     queryKey: [...base, "delivery"],
     enabled: !!s.store && s.manager,
@@ -192,6 +150,8 @@ export function Performance() {
 
   const r = report.data
   const sm = r?.summary || {}
+  const x = insights.data
+  const fu = x?.funnel
   const label = r ? `${shortDate(r.period.from)} – ${shortDate(r.period.to)}` : ""
   const today = algerToday()
 
@@ -204,6 +164,7 @@ export function Performance() {
   function exportCsv() {
     if (!r) return
     const x = r.summary
+    const ins = insights.data
     const sections: unknown[][] = [
       ["WeConvert · Performance & rapports"], ["Boutique", s.storeName], ["Du", r.period.from], ["Au", r.period.to], ["Fuseau horaire", "Africa/Algiers"],
       ["Filtre canal", fl.channel ? CHANNELS[fl.channel] : "Tous"], ["Filtre agent", fl.agent ? s.memberName(fl.agent) : s.manager ? "Tous" : "Mes commandes"], [],
@@ -214,7 +175,20 @@ export function Performance() {
       ...(s.manager ? [["Commandes créées dans la période et actuellement livrées (ZR)", delivered.data?.total ?? 0]] : []), [],
       ["Évolution", "Reçues", "Confirmées", "Annulées"], ...(r.days || []).map((d) => [d.date, d.orders, d.confirmed, d.cancelled]), [],
       ["Canal", "Reçues", "Confirmées", "Annulées", "Montant COD confirmé (DA)"], ...(r.channels || []).map((d) => [CHANNELS[d.channel] || d.channel, d.orders, d.confirmed, d.cancelled, d.confirmed_amount]), [],
-      ["Wilaya", "Reçues", "Confirmées", "Montant COD confirmé (DA)"], ...(r.wilayas || []).map((d) => [d.wilaya, d.orders, d.confirmed, d.confirmed_amount]), [],
+      ...(ins
+        ? [
+            ["Parcours des commandes"],
+            ["Reçues", "Confirmées", "Expédiées", "Livrées", "Retournées", "En route", "Perdues avant expédition", "À traiter", "COD livré (DA)"],
+            [ins.funnel.received, ins.funnel.confirmed, ins.funnel.shipped, ins.funnel.delivered, ins.funnel.returned, ins.funnel.in_progress, ins.funnel.lost, ins.funnel.pending, ins.funnel.delivered_cod], [],
+            ["Wilaya", "Commandes", "Confirmées", "Taux de confirmation", "Expédiées", "Livrées", "Retournées", "Taux de livraison", "Délai moyen (jours)", "COD livré (DA)"],
+            ...(ins.wilayas || []).map((w) => [w.wilaya, w.orders, w.confirmed, reportRate(w.confirmed, w.rate_base), w.shipped, w.delivered, w.returned, deliveryRate(w.delivered, w.returned), w.avg_days ?? "", w.delivered_cod]), [],
+            ["Motif de perte", "Décision", "Commandes"], ...(ins.reasons || []).map((m) => [m.reason || "Sans motif", m.status, m.orders]), [],
+            ["Agent", "Commandes", "Confirmées", "Livrées", "Retournées", "Premier appel (minutes, médiane)", "Appels sans réponse par commande"],
+            ...(ins.agents || []).map((g) => [g.name, g.orders, g.confirmed, g.delivered, g.returned, g.median_first_minutes ?? "", g.avg_no_answer ?? ""]), [],
+            ["Panier moyen (DA)", "Articles par commande", "Commandes à plusieurs articles", "Délai de livraison médian (jours)"],
+            [ins.basket.avg_total ?? "", ins.basket.avg_units ?? "", ins.basket.multi_unit ?? 0, ins.delivery_days ?? ""], [],
+          ]
+        : [["Wilaya", "Reçues", "Confirmées", "Montant COD confirmé (DA)"], ...(r.wilayas || []).map((d) => [d.wilaya, d.orders, d.confirmed, d.confirmed_amount]), []]),
       ["Produit", "SKU", "Unités", "Unités confirmées", "Montant des lignes confirmées (DA)"], ...(r.products || []).map((d) => [d.name, d.sku, d.units, d.confirmed_units, d.confirmed_lines_amount]), [],
       ["Agent actuel", "Reçues", "Confirmées", "Annulées", "Montant COD confirmé (DA)"], ...(r.agents || []).map((d) => [d.name, d.orders, d.confirmed, d.cancelled, d.confirmed_amount]),
     ]
@@ -307,47 +281,46 @@ export function Performance() {
         <Loading text="Calcul du rapport…" />
       ) : (
         <>
-          <Card className={cn("mt-5 grid gap-px overflow-hidden bg-border py-0", s.manager ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3")}>
+          <Card className="mt-5 grid gap-px overflow-hidden bg-border py-0 sm:grid-cols-2 xl:grid-cols-4">
             <Kpi label="Commandes reçues" value={f(sm.orders)} foot={"Créées du " + label} icon={ShoppingBag} />
-            <Kpi label="Taux de confirmation" value={reportRate(sm.confirmed, sm.rate_base ?? sm.orders)} foot={`${f(sm.confirmed)} confirmées ÷ ${f(sm.rate_base ?? sm.orders)} reçues hors historique Woo`} icon={BadgeCheck} />
-            <Kpi label="Montant COD confirmé" value={money(sm.confirmed_amount)} foot="Promis à la livraison · non encaissé" icon={Coins} />
-            {s.manager && <Kpi label="Commandes livrées" value={delivered.data ? f(delivered.data.total) : delivered.isError ? "—" : "…"} foot={"Créées du " + label + " · statut ZR actuel · voir la liste"} icon={Truck} onClick={scrollToDelivered} />}
+            <Kpi label="Taux de confirmation" value={reportRate(sm.confirmed, sm.rate_base ?? sm.orders)} foot={`${f(sm.confirmed)} confirmées sur ${f(sm.rate_base ?? sm.orders)} commandes (hors anciens statuts Woo)`} icon={BadgeCheck} />
+            <Kpi
+              label="Taux de livraison"
+              value={fu ? deliveryRate(fu.delivered, fu.returned) : insights.isError ? "—" : "…"}
+              foot={fu ? `${f(fu.delivered)} livrées sur ${f(Number(fu.delivered || 0) + Number(fu.returned || 0))} colis arrivés au bout${Number(fu.in_progress) ? " · " + f(fu.in_progress) + " en route" : ""}` : "Livrées ÷ (livrées + retournées)"}
+              icon={PackageCheck}
+            />
+            <Kpi
+              label="COD livré"
+              value={fu ? money(fu.delivered_cod) : insights.isError ? "—" : "…"}
+              foot={s.manager ? "Montant des colis livrés · reversement ZR non vérifié · voir la liste" : "Montant de vos colis livrés · reversement ZR non vérifié"}
+              icon={Coins}
+              onClick={s.manager ? scrollToDelivered : undefined}
+            />
           </Card>
           {legacy > 0 && (
             <Notice tone="warning" className="mt-4">
-              {f(legacy)} commandes historiques portent un statut « confirmé » ou « annulé » issu de WooCommerce sans décision COD vérifiée. Elles restent consultables, mais sont exclues des confirmations, annulations et montants de ce rapport.
+              {f(legacy)} anciennes commandes portent un statut « confirmé » ou « annulé » venu de WooCommerce, sans appel vérifié. Elles restent consultables, mais ne comptent ni dans les confirmations, ni dans les annulations, ni dans les montants.
             </Notice>
           )}
           {Number(sm.woo_orders) > 0 && (
             <Notice className="mt-4">
-              Suivi WooCommerce : {f(sm.woo_purchase_marked)} sur {f(sm.woo_orders)} commandes de la période ont un Purchase CAPI marqué envoyé par la Suite WeConvert. {f(sm.woo_unverified)} restent sans preuve et sont incluses dans ces chiffres opérationnels ; elles ne doivent pas être comparées directement aux achats Meta.
+              Suivi WooCommerce : {f(sm.woo_purchase_marked)} commandes sur {f(sm.woo_orders)} ont un Purchase CAPI marqué envoyé par la Suite WeConvert. Les {f(sm.woo_unverified)} autres sont bien comptées ici, mais ne doivent pas être comparées aux achats affichés par Meta.
             </Notice>
           )}
 
-          {s.manager && (
-            <Card className="mt-5 gap-0 overflow-hidden py-0">
-              <div className="border-b p-4 sm:px-6">
-                <h2 id="delivered-period-title" tabIndex={-1} className="scroll-mt-20 font-semibold outline-none">Commandes de la période livrées</h2>
-                <p className="text-sm text-muted-foreground">{f(delivered.data?.total)} commande(s) créée(s) pendant la période · statut ZR actuel « Livré »</p>
-              </div>
-              <DataTable
-                head={["Commande", "Client", "Canal", "Commande créée le", "COD demandé", "Statut ZR"]}
-                right={[4]}
-                empty="Essayez une autre plage de dates ou un autre canal."
-                rows={(delivered.data?.orders || []).map((o) => [
-                  <button type="button" className="num font-semibold text-primary hover:underline" onClick={() => ui.openOrder(o.order_id)}>#WC{String(o.number).padStart(5, "0")}{o.woo_number && <span className="block text-xs font-normal text-muted-foreground">Woo #{o.woo_number}</span>}</button>,
-                  <>{o.customer_name}<span className="block text-xs text-muted-foreground">{o.wilaya}</span></>,
-                  CHANNELS[o.channel] || o.channel,
-                  new Date(o.created_at).toLocaleString("fr-FR", { timeZone: "Africa/Algiers", dateStyle: "medium", timeStyle: "short" }),
-                  money(o.cod_amount),
-                  <ZrBadge state={o.state} />,
-                ])}
-              />
-              <Pager total={Number(delivered.data?.total || 0)} page={deliveredPage} onPage={(n) => setDeliveredPage(Math.max(1, n))} />
-            </Card>
-          )}
-
-          <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5">
+            {insights.isError ? (
+              <Notice tone="danger" role="alert">Analyse détaillée indisponible : {safeError(insights.error)}</Notice>
+            ) : !x ? (
+              <Loading text="Analyse du parcours des commandes…" />
+            ) : (
+              <>
+                <Journey x={x} />
+                <Alerts x={x} />
+              </>
+            )}
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <Card className="gap-0 p-5 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -372,27 +345,26 @@ export function Performance() {
             </Card>
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-2">
-            <Section title="Par canal" description="Site web, WhatsApp, Messenger, Instagram, téléphone et saisie manuelle">
-              <DataTable head={["Canal", "Reçues", "Confirmées", "Taux", "Montant COD confirmé"]} right={[1, 2, 3, 4]} empty="Les commandes par message apparaîtront selon leur canal de saisie."
-                rows={(r.channels || []).map((x) => [CHANNELS[x.channel] || x.channel, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.rate_base ?? x.orders), money(x.confirmed_amount)])} />
-            </Section>
-            <Section title="Par wilaya" description="Les 10 premières selon les commandes reçues">
-              <DataTable head={["Wilaya", "Reçues", "Confirmées", "Taux"]} right={[1, 2, 3]} empty="Aucune wilaya dans cette sélection."
-                rows={(r.wilayas || []).map((x) => [x.wilaya, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.rate_base ?? x.orders)])} />
-            </Section>
+            {x && (
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+                <LostReasons x={x} />
+                <Section title="Par canal" description="Site web, WhatsApp, Messenger, Instagram, téléphone et saisie manuelle">
+                  <DataTable head={["Canal", "Reçues", "Confirmées", "Taux", "Montant COD confirmé"]} right={[1, 2, 3, 4]} empty="Les commandes par message apparaîtront selon leur canal de saisie."
+                    rows={(r.channels || []).map((c) => [CHANNELS[c.channel] || c.channel, f(c.orders), f(c.confirmed), reportRate(c.confirmed, c.rate_base ?? c.orders), money(c.confirmed_amount)])} />
+                </Section>
+              </div>
+            )}
+            {x && <Wilayas x={x} />}
+            {x && <Agents x={x} />}
             <Section title="Par produit" description="Articles des commandes, variantes comprises · montant des lignes hors frais de livraison">
               <DataTable head={["Produit", "Unités commandées", "Unités confirmées", "Lignes confirmées"]} right={[1, 2, 3]} empty="Aucun produit dans cette sélection."
-                rows={(r.products || []).map((x) => [<>{x.name}<span className="block text-xs font-normal text-muted-foreground">{x.sku}</span></>, f(x.units), f(x.confirmed_units), money(x.confirmed_lines_amount)])} />
+                rows={(r.products || []).map((c) => [<>{c.name}<span className="block text-xs font-normal text-muted-foreground">{c.sku}</span></>, f(c.units), f(c.confirmed_units), money(c.confirmed_lines_amount)])} />
             </Section>
-            <Section title="Par agent" description="Affectation actuelle, commandes non attribuées incluses">
-              <DataTable head={["Agent actuel", "Commandes", "Confirmées", "Taux", "Montant COD confirmé"]} right={[1, 2, 3, 4]} empty="Aucune attribution dans cette sélection."
-                rows={(r.agents || []).map((x) => [x.name, f(x.orders), f(x.confirmed), reportRate(x.confirmed, x.rate_base ?? x.orders), money(x.confirmed_amount)])} />
-            </Section>
+            {x && <BasketAndHours x={x} />}
+            <Notice>
+              Comment lire ce rapport : toutes les commandes créées pendant la période sont suivies jusqu’à aujourd’hui. Une commande créée le 3 et livrée le 10 compte dans la période qui contient le 3. Confirmée ne veut pas dire livrée, et livrée chez ZR ne veut pas dire argent reçu.
+            </Notice>
           </div>
-          <Notice className="mt-4">
-            Taux de confirmation = commandes confirmées dans le CRM et vérifiables ÷ commandes créées dans la période. Les anciens statuts déduits de WooCommerce sont exclus. Le montant COD confirmé n’est pas encaissé. « Livrées » compte ces mêmes commandes actuellement au statut livré chez ZR ; leur date réelle de livraison n’est pas connue pour les colis historiques.
-          </Notice>
 
           {s.manager &&
             (fl.agent ? (
@@ -406,14 +378,9 @@ export function Performance() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="font-semibold">Livraison & marge COD</h2>
-                      <p className="text-sm text-muted-foreground">Commandes créées pendant la période sélectionnée · état ZR au dernier suivi</p>
+                      <p className="text-sm text-muted-foreground">Ce qu’il reste après le coût des produits, les frais ZR et vos dépenses saisies.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={scrollToDelivered}>Voir les commandes livrées</Button>
-                  </div>
-                  <div className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
-                    <Kpi label="Livrées · cohorte créée" value={f(d.delivered)} foot={`${f(d.shipped)} remis à ZR · ${reportRate(d.delivered, d.closed)} livrés sur colis terminés`} icon={Truck} />
-                    <Kpi label="Retours ZR" value={f(d.returned)} foot={`${reportRate(d.returned, d.closed)} des colis terminés (livrés + retournés)`} icon={Undo2} />
-                    <Kpi label="COD livré" value={money(d.delivered_cod)} foot="COD demandé · reversement non vérifié" icon={Coins} />
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-lg bg-muted p-4">
@@ -474,6 +441,29 @@ export function Performance() {
                     </form>
                   </Card>
                 </div>
+                {(
+            <Card className="gap-0 overflow-hidden py-0">
+              <div className="border-b p-4 sm:px-6">
+                <h2 id="delivered-period-title" tabIndex={-1} className="scroll-mt-20 font-semibold outline-none">Commandes livrées</h2>
+                <p className="text-sm text-muted-foreground">{f(delivered.data?.total)} commande(s) de la période au statut ZR « Livré » aujourd’hui</p>
+              </div>
+              <DataTable
+                head={["Commande", "Client", "Canal", "Commande créée le", "COD demandé", "Statut ZR"]}
+                right={[4]}
+                empty="Essayez une autre plage de dates ou un autre canal."
+                rows={(delivered.data?.orders || []).map((o) => [
+                  <button type="button" className="num font-semibold text-primary hover:underline" onClick={() => ui.openOrder(o.order_id)}>#WC{String(o.number).padStart(5, "0")}{o.woo_number && <span className="block text-xs font-normal text-muted-foreground">Woo #{o.woo_number}</span>}</button>,
+                  <>{o.customer_name}<span className="block text-xs text-muted-foreground">{o.wilaya}</span></>,
+                  CHANNELS[o.channel] || o.channel,
+                  new Date(o.created_at).toLocaleString("fr-FR", { timeZone: "Africa/Algiers", dateStyle: "medium", timeStyle: "short" }),
+                  money(o.cod_amount),
+                  <ZrBadge state={o.state} />,
+                ])}
+              />
+              <Pager total={Number(delivered.data?.total || 0)} page={deliveredPage} onPage={(n) => setDeliveredPage(Math.max(1, n))} />
+            </Card>
+          )}
+
                 <Section title="Dépenses enregistrées" description={`${f((expenses.data || []).length)} affichées pour la période · maximum 100 lignes${fl.channel ? " · tous les canaux de la boutique" : ""}`}>
                   <DataTable
                     head={["Date", "Type", "Description", "Montant", "Action"]}

@@ -27,3 +27,55 @@ export function reportBuckets(days=[]){
  }
  return buckets;
 }
+
+// Market reference points for COD in Algeria (habitual levels, not this account's history): shown as hints,
+// never as verdicts. They are defaults, kept in one place so they can become a per-company setting.
+export const REPORT_MARKS={confirmation:65,delivery:72,firstCallMinutes:30,wilayaReturns:30,wilayaMinParcels:5};
+
+/** Delivery rate on parcels that reached an outcome: delivered ÷ (delivered + returned). */
+export function deliveryRate(delivered,returned){
+ return reportRate(delivered,Number(delivered||0)+Number(returned||0));
+}
+
+/** Readable duration from minutes: « 12 min », « 2 h 05 », « 3 j 4 h ». */
+export function minutesLabel(m){
+ if(m===null||m===undefined||m===''||!Number.isFinite(Number(m)))return '—';
+ const v=Math.max(0,Math.round(Number(m)));
+ if(v<60)return v+' min';
+ if(v<1440)return Math.floor(v/60)+' h '+String(v%60).padStart(2,'0');
+ const d=Math.floor(v/1440),h=Math.floor((v%1440)/60);
+ return d+' j'+(h?' '+h+' h':'');
+}
+
+/** Wilaya rows sorted for reading: most orders, most returns (share), or weakest delivery rate. */
+export function sortWilayas(rows=[],mode='orders',marks=REPORT_MARKS){
+ const share=r=>{const done=Number(r.delivered||0)+Number(r.returned||0);return done?Number(r.returned||0)/done:-1};
+ const list=[...rows];
+ if(mode==='returns')return list.sort((a,b)=>(Number(b.delivered||0)+Number(b.returned||0)>=marks.wilayaMinParcels)-(Number(a.delivered||0)+Number(a.returned||0)>=marks.wilayaMinParcels)||share(b)-share(a)||Number(b.orders)-Number(a.orders));
+ return list.sort((a,b)=>Number(b.orders)-Number(a.orders)||String(a.wilaya).localeCompare(String(b.wilaya),'fr'));
+}
+
+/**
+ * Points to watch, in plain words. Only raised with enough data to mean something
+ * (at least 20 decided orders, or 10 parcels with an outcome), so a quiet week never cries wolf.
+ */
+export function reportAlerts(x,marks=REPORT_MARKS){
+ const out=[];if(!x)return out;
+ const fu=x.funnel||{},base=Number(fu.rate_base||0),conf=Number(fu.confirmed||0);
+ const done=Number(fu.delivered||0)+Number(fu.returned||0);
+ if(base>=20&&100*conf/base<marks.confirmation)out.push({key:'confirmation',tone:'warning',
+  title:'Taux de confirmation bas : '+reportRate(conf,base),
+  detail:'Repère habituel : '+marks.confirmation+' % ou plus. Regardez d’abord les motifs de perte et la rapidité du premier appel.'});
+ if(done>=10&&100*Number(fu.delivered||0)/done<marks.delivery)out.push({key:'delivery',tone:'danger',
+  title:'Trop de retours : '+deliveryRate(fu.delivered,fu.returned)+' livrées',
+  detail:'Repère habituel : '+marks.delivery+' % ou plus. Regardez les wilayas qui retournent le plus et la qualité des confirmations par agent.'});
+ const sp=x.speed||{};
+ if(Number(sp.handled||0)>=20&&Number(sp.median_first_minutes)>marks.firstCallMinutes)out.push({key:'speed',tone:'warning',
+  title:'Premier appel trop tardif : '+minutesLabel(sp.median_first_minutes)+' en général',
+  detail:'Appeler dans les '+marks.firstCallMinutes+' minutes après la commande augmente nettement la confirmation.'});
+ const bad=(x.wilayas||[]).filter(w=>{const d=Number(w.delivered||0)+Number(w.returned||0);return d>=marks.wilayaMinParcels&&100*Number(w.returned||0)/d>marks.wilayaReturns});
+ if(bad.length)out.push({key:'wilayas',tone:'danger',
+  title:bad.length+(bad.length>1?' wilayas retournent':' wilaya retourne')+' plus de '+marks.wilayaReturns+' % des colis',
+  detail:bad.slice(0,4).map(w=>w.wilaya+' ('+reportRate(w.returned,Number(w.delivered||0)+Number(w.returned||0))+')').join(' · ')+(bad.length>4?' et '+(bad.length-4)+' autres':'')+'. À vérifier avant d’y dépenser en publicité.'});
+ return out;
+}

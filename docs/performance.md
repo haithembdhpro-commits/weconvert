@@ -28,3 +28,19 @@ Les dépenses de publicité et d'exploitation saisies par date peuvent être sou
 ## Rétention des journaux techniques (28/10/2026)
 
 Une tâche planifiée (`weconvert-purge-logs`, chaque nuit à 03:23 UTC) supprime : les clés d'idempotence de plus de 30 jours, les identifiants de livraison de webhooks Shopify/YouCan de plus de 30 jours, et les journaux d'intégration/source de plus de 180 jours en gardant toujours les 200 derniers par connexion. L'historique des commandes (`crm_events`) n'est jamais purgé.
+
+## Rapport complet (29/10/2026)
+
+Fonction `crm_report_insights` (migration `20261029120000_report_insights.sql`, `SECURITY INVOKER`, mêmes filtres et contrôles que `crm_performance` : un agent ne lit que ses commandes et leurs colis). Logique d'affichage dans `src/domain/report-domain.mjs` (testée en Node), écrans dans `src/pages/report-parts.tsx`. Le mot « cohorte » n'est jamais affiché : on parle des « commandes créées pendant la période ».
+
+| Bloc | Ce qu'il montre |
+| --- | --- |
+| L'essentiel | Reçues, taux de confirmation, **taux de livraison** = livrées ÷ (livrées + retournées), COD livré (montant ZR, reversement non vérifié). |
+| Le parcours de vos commandes | Reçues → Confirmées → Expédiées (remises à ZR) → Livrées, avec le % à chaque étape ; barre livrées / retournées / en route ; perdues avant l'expédition et encore à traiter. Tant que des colis sont en route, le taux de livraison est annoncé **provisoire**. |
+| À surveiller | Alertes en mots simples, seulement avec assez de données (20 commandes décidées ou 10 colis arrivés au bout) : confirmation < 65 %, livraison < 72 %, premier appel médian > 30 min, wilayas avec plus de 30 % de retours (5 colis minimum). Ce sont des **repères habituels du COD en Algérie** (`REPORT_MARKS`), pas des objectifs de la boutique ; à rendre réglables par entreprise. |
+| Pourquoi des commandes sont perdues | Motif de la dernière décision Annulée / Faux numéro / Doublon (texte saisi, avec les motifs proposés), part des pertes. Les anciens statuts Woo sont exclus. |
+| Wilayas | Toutes les wilayas ayant des commandes (10 affichées, bouton pour tout voir), tri par commandes ou par part de retours (5 colis minimum pour monter en tête) : confirmation, livrées, retournées, taux de livraison (signalé « bas » sous le repère), délai moyen remise ZR → livraison, COD livré. |
+| Agents | Confirmation, **livraison de ses confirmées** (un agent qui force les confirmations crée des retours), premier appel médian (arrivée → première action : appel, rappel ou décision), appels sans réponse par commande. |
+| Panier et heures | Panier moyen des confirmées, articles par commande, % à plusieurs articles, % traitées en 30 min, délai de livraison médian ; commandes par heure (heure d'Alger) pour planifier l'équipe d'appel. |
+
+Le CSV exporte aussi le parcours, les wilayas, les motifs, les agents et le panier. Test SQL : `tests/insights.sql` (2 entreprises, 2 boutiques, propriétaire / agent / autre entreprise).
