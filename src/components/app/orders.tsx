@@ -1157,10 +1157,14 @@ function OrderDetailDialog({ id, onClose }: { id: string | null; onClose: () => 
       <SheetContent
         side="right"
         className="w-full gap-0 overflow-y-auto border-l shadow-2xl sm:max-w-xl"
+        // Only a real click outside closes the panel. Focus moving elsewhere does not: a menu that opened
+        // the order (notifications, search) hands focus back to its button as it closes, which would
+        // otherwise shut the panel the moment it opens.
+        onFocusOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => {
-          // A click outside closes the panel, except on another order (the panel switches to it) or on a toast.
+          // Exceptions: another order (the panel switches to it), a toast, or a menu / search layered above.
           const target = e.target as HTMLElement | null
-          if (target?.closest("[data-order-row], [data-sonner-toaster]")) e.preventDefault()
+          if (target?.closest("[data-order-row], [data-sonner-toaster], [role=menu], [role=dialog], [data-radix-popper-content-wrapper]")) e.preventDefault()
         }}
       >
         <SheetHeader className="sticky top-0 z-10 border-b bg-background/95 pt-[max(1rem,env(safe-area-inset-top))] pr-14 backdrop-blur sm:pl-6">
