@@ -15,7 +15,7 @@ Le backend ne change pas : schéma, RLS, RPC, fonctions Edge, Vault et cron sont
 - `src/components/app/` : coque, tableau et dialogues de commande, primitives de page. `src/components/ui/` : shadcn.
 
 ## Direction visuelle (décision du propriétaire, 28/10/2026)
-Palette **Picton Blue** (Kigen.design) en tokens shadcn dans `src/index.css`, thème clair et sombre. L'accent bleu est définitif (28/10/2026) : l'aperçu orange a été retiré. Police Outfit auto-hébergée. Icônes Lucide.
+Palette **Picton Blue** (Kigen.design) en tokens shadcn dans `src/index.css`, thème clair et sombre. L'accent bleu est définitif (28/10/2026) : l'aperçu orange a été retiré. Police **Inter** auto-hébergée (celle de Shopify Polaris, décision du 29/10/2026, remplace Outfit). Icônes Lucide.
 
 Contrastes calculés (WCAG) :
 - clair : bouton principal blanc sur `#0071a4` 5,39:1 · texte `#001320` sur blanc 18,85:1 · texte secondaire `#005278` sur `#f5faff` 8,07:1 · bordure de champ `#009de1` 3,04:1.
@@ -83,3 +83,10 @@ Sans variables, le build vise le projet de `src/domain/config.json` (production)
 
 ## Menu du compte (29/10/2026)
 Avatar de l'en-tête (et carte utilisateur en bas du menu latéral) → menu déroulant : nom, e-mail, rôle et entreprise ; **Mon profil** (nom affiché, RPC `crm_my_profile_update`, chaque membre actif uniquement pour lui-même) ; **Changer / Définir un mot de passe** (le mot de passe actuel est vérifié avant le changement ; « Définir » pour un compte Google/Microsoft/Apple/Facebook) ; Paramètres, Équipe & accès et Intégrations (responsables) ; Rechercher (Ctrl/⌘ K) ; **Apparence** Clair / Sombre / Comme l'appareil (`wc-theme` = `light|dark|system`, appliqué avant le rendu par `public/theme-init.js`) ; **Entreprise** si l'utilisateur en a plusieurs ; **Se déconnecter** et **Déconnecter tous mes appareils** (`signOut({ scope: "global" })`, avec confirmation). Choix intégrés au menu, sans sous-menu latéral qui sortirait de l'écran sur téléphone.
+
+## Tokens Shopify Polaris (29/10/2026)
+Repris du paquet officiel `@shopify/polaris-tokens` 9.4.2, dans `@theme` de `src/index.css` (les classes Tailwind existantes en héritent, sans réécrire les écrans) :
+- **Police** Inter (variable, auto-hébergée : `@fontsource-variable/inter`). **Graisses** Polaris : normal 450, medium 550, semibold 650, bold 700.
+- **Tailles** : texte courant **14 px / 20** gardé (décision du propriétaire ; Polaris est à 13 px sur ordinateur), petit texte 12/16 et 13/20 pour les légendes, titres de page 20/24 bold, chiffres clés 24/32 bold, grands titres 30/40. Interlettrage resserré Polaris : −0,2 px (titres), −0,3 px (grands chiffres).
+- **Rayons** : 4 px, 8 px (boutons, champs), 12 px (cartes, menus), 16 px. **Ombres** Polaris 100 → 600 (cartes : 1 px très léger sous la bordure). **Animations** : 150 ms, courbe ease-out Polaris `cubic-bezier(0.19, 0.91, 0.38, 1)`.
+- Couleurs inchangées (Picton Blue). Espacements : grille de 4 px déjà alignée sur Polaris (`space-100` = 4 px … `space-600` = 24 px).

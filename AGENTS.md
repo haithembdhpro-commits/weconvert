@@ -1,6 +1,6 @@
 # WeConvert CRM — consignes pour le frontend
 
-L'interface est en React + Tailwind + shadcn/ui. Lire `docs/UI.md` avant toute intervention visuelle : palette Picton Blue en tokens (`src/index.css`), police Outfit, icônes Lucide, composants de `src/components/ui/` et `src/components/app/`. Ajouter les fonctions dans ce langage visuel, sans refaire la coque ni la navigation. Si le propriétaire demande expressément une nouvelle direction, suivre sa nouvelle instruction.
+L'interface est en React + Tailwind + shadcn/ui. Lire `docs/UI.md` avant toute intervention visuelle : palette Picton Blue en tokens (`src/index.css`), police Inter et échelle Shopify Polaris (29/10/2026), icônes Lucide, composants de `src/components/ui/` et `src/components/app/`. Ajouter les fonctions dans ce langage visuel, sans refaire la coque ni la navigation. Si le propriétaire demande expressément une nouvelle direction, suivre sa nouvelle instruction.
 
 Les descriptions des futurs modules restent des spécifications : ne pas les présenter comme des fonctions livrées. Préserver les flux métier (commandes, confirmation, stock, rôles, connecteurs WooCommerce/Shopify/YouCan, ZR, rapports, thème clair/sombre, temps réel), les filtres et les brouillons. N'afficher que des métriques réellement disponibles. Tester desktop/mobile, clair/sombre, clavier et les parcours concernés.
 

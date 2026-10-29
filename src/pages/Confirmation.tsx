@@ -93,7 +93,7 @@ export function Confirmation({ tab }: { tab: string }) {
           <Card key={x.label} className="flex-row items-center justify-between gap-3 px-5 py-4">
             <span>
               <span className="block text-sm text-muted-foreground">{x.label}</span>
-              <span className="num block text-2xl font-semibold">{x.n === undefined ? (ov.isError ? "—" : "…") : f(x.n)}</span>
+              <span className="num block text-2xl font-bold tracking-tight">{x.n === undefined ? (ov.isError ? "—" : "…") : f(x.n)}</span>
             </span>
             <span className="grid size-10 place-items-center rounded-lg bg-secondary text-secondary-foreground">
               <x.icon className="size-[18px]" aria-hidden />
@@ -225,7 +225,7 @@ export function Confirmation({ tab }: { tab: string }) {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg bg-muted p-4">
                   <p className="text-xs text-muted-foreground">Montant à confirmer</p>
-                  <p className="num mt-1 text-2xl font-semibold">{money(d.total)}</p>
+                  <p className="num mt-1 text-2xl font-bold tracking-tight">{money(d.total)}</p>
                 </div>
                 <div className="rounded-lg bg-muted p-4">
                   <p className="text-xs text-muted-foreground">Adresse de livraison</p>

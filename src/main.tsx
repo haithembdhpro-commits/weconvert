@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { SessionProvider } from "@/lib/session"
 import { ThemeProvider } from "@/lib/theme"
 import App from "./App"
-import "@fontsource-variable/outfit"
+import "@fontsource-variable/inter"
 import "./index.css"
 
 const queryClient = new QueryClient({

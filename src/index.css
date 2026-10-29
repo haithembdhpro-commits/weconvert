@@ -2,7 +2,9 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
-/* Two densities (28/10/2026): compact with a mouse (Stripe/Polaris-like, WCAG 2.2 AA 24 px), 44 px+ targets for touch. */
+/* Two densities (28/10/2026): compact with a mouse (Stripe/Polaris-like, WCAG 2.2 AA 24 px), 44 px+ targets for touch.
+   Type, weights, radii, shadows and motion follow Shopify Polaris tokens (@shopify/polaris-tokens 9.4.2, 29/10/2026);
+   body text stays 14 px (owner decision), colours stay Picton Blue. */
 @custom-variant coarse (@media (pointer: coarse));
 
 /* WeConvert — tokens shadcn, palette Picton Blue (Kigen.design). Contrastes calculés : voir docs/UI-REACT.md */
@@ -12,7 +14,7 @@
   --picton-14: #004262; --picton-15: #003a56; --picton-16: #00324b; --picton-17: #002a41;
   --picton-18: #002236; --picton-19: #001b2b; --picton-20: #001320;
 
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --background: #f5faff;
   --foreground: var(--picton-20);
   --card: #ffffff;
@@ -93,11 +95,41 @@
 }
 
 @theme inline {
-  --font-sans: "Outfit Variable", "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Polaris font-family-sans, self-hosted (CSP: no remote font). */
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  /* Polaris weights: regular 450 · medium 550 · semibold 650 · bold 700 (Inter is variable). */
+  --font-weight-normal: 450;
+  --font-weight-medium: 550;
+  --font-weight-semibold: 650;
+  --font-weight-bold: 700;
+  /* Polaris type ramp with a 14 px body: bodySm 12/16 · bodyLg 14/20 · headingLg 18/24 and 20/24 · headingXl 24/32 · heading2xl 30/40. */
+  --text-xs: 0.75rem; --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem; --text-sm--line-height: 1.25rem;
+  --text-base: 1rem; --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem; --text-lg--line-height: 1.5rem;
+  --text-xl: 1.25rem; --text-xl--line-height: 1.5rem;
+  --text-2xl: 1.5rem; --text-2xl--line-height: 2rem;
+  --text-3xl: 1.875rem; --text-3xl--line-height: 2.5rem;
+  /* Polaris letter-spacing: dense −0.2 px (headings), denser −0.3 px (large figures). */
+  --tracking-tight: -0.0125rem;
+  --tracking-tighter: -0.01875rem;
+  /* Polaris radii: 100 = 4 px, 200 = 8 px (buttons, fields), 300 = 12 px (cards, menus), 400 = 16 px. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  /* Polaris elevation 100 → 600. */
+  --shadow-xs: 0 1px 0 0 rgb(26 26 26 / 0.07);
+  --shadow-sm: 0 1px 0 0 rgb(26 26 26 / 0.07);
+  --shadow-md: 0 4px 6px -2px rgb(26 26 26 / 0.2);
+  --shadow-lg: 0 8px 16px -4px rgb(26 26 26 / 0.22);
+  --shadow-xl: 0 12px 20px -8px rgb(26 26 26 / 0.24);
+  --shadow-2xl: 0 20px 20px -8px rgb(26 26 26 / 0.28);
+  /* Polaris motion: 150 ms, ease-out cubic-bezier(0.19, 0.91, 0.38, 1). */
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.19, 0.91, 0.38, 1);
+  --ease-out: cubic-bezier(0.19, 0.91, 0.38, 1);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

@@ -273,12 +273,12 @@ export function Orders({ tab }: { tab: string }) {
                 navigate("orders", x.id === "all" ? "" : x.id)
               }}
               className={cn(
-                "flex min-h-14 items-center justify-between gap-2 rounded-xl border bg-card px-3.5 py-2.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+                "flex min-h-14 items-center justify-between gap-1.5 rounded-xl border bg-card px-3 py-2.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
                 on && "border-primary bg-accent shadow-[inset_0_-3px_0_var(--primary)]",
               )}
             >
               <span className="min-w-0">
-                <span className="block truncate text-sm text-muted-foreground">{x.label}</span>
+                <span className="block text-sm leading-tight text-muted-foreground">{x.label}</span>
                 <span className="num block text-lg font-semibold">{list.data ? f(n) : "…"}</span>
               </span>
               <x.icon className="size-[18px] shrink-0 text-muted-foreground" aria-hidden />

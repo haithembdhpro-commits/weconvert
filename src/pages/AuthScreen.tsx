@@ -102,7 +102,7 @@ export function AuthScreen() {
 
   return (
     <Shell>
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{lead}</p>
       {authInfo && <Notice className="mt-4">{authInfo}</Notice>}
       {!password && !reset && <SocialSignIn signup={signup} onError={setError} />}
@@ -193,7 +193,7 @@ export function OnboardingScreen() {
 
   return (
     <Shell>
-      <h1 className="text-2xl font-semibold tracking-tight">{hasInvitation ? "Rejoindre votre équipe." : "Créons votre espace CRM."}</h1>
+      <h1 className="text-2xl font-bold tracking-tight">{hasInvitation ? "Rejoindre votre équipe." : "Créons votre espace CRM."}</h1>
       <p className="mt-1 text-sm text-muted-foreground">Connecté avec {user?.email}.</p>
       {hasInvitation ? (
         <div className="mt-6 grid gap-3">

@@ -73,7 +73,7 @@ function Kpi({
         </a>
       </div>
       <div className="mt-4 flex items-end justify-between gap-3 sm:min-h-14">
-        <p className="num min-w-0 text-[1.75rem] leading-none font-semibold tracking-tight">{value}</p>
+        <p className="num min-w-0 text-2xl leading-none font-bold tracking-tight">{value}</p>
         <span className={cn("shrink-0", tone)}>{children}</span>
       </div>
       <p className="mt-2 text-[0.8125rem]">{delta}</p>
@@ -131,7 +131,7 @@ export function Dashboard() {
     <>
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl leading-tight font-semibold tracking-tight">{first ? `Bonjour, ${first}` : "Bonjour"}</h1>
+          <h1 className="text-xl font-bold tracking-tight">{first ? `Bonjour, ${first}` : "Bonjour"}</h1>
           <p className="text-muted-foreground">
             <Ago at={Math.max(ov.dataUpdatedAt, cur.dataUpdatedAt)} /> · {s.storeName}
           </p>

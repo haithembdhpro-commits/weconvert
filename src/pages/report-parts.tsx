@@ -29,7 +29,7 @@ export function Kpi({ label, value, foot, icon: Icon, onClick }: { label: string
       className={cn("grid min-w-0 content-start gap-1 bg-card p-5 text-left", onClick && "outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset")}
     >
       <span className="flex items-center gap-2 text-sm text-muted-foreground"><Icon className="size-4" aria-hidden />{label}</span>
-      <span className="num text-[1.75rem] font-semibold tracking-tight">{value}</span>
+      <span className="num text-2xl font-bold tracking-tight">{value}</span>
       <span className="text-[0.8125rem] leading-snug text-muted-foreground">{foot}</span>
     </Tag>
   )
@@ -110,7 +110,7 @@ export function Journey({ x }: { x: Insights }) {
           return (
             <li key={label} className="relative grid gap-1 rounded-lg border bg-card p-4">
               <span className="flex items-center gap-2 text-sm text-muted-foreground"><Icon className="size-4" aria-hidden />{i + 1}. {label}</span>
-              <span className="num text-2xl font-semibold tracking-tight">{f(n)}</span>
+              <span className="num text-2xl font-bold tracking-tight">{f(n)}</span>
               <span className="text-[0.8125rem] leading-snug text-muted-foreground">{foot}</span>
               {i < steps.length - 1 && <ArrowRight className="absolute top-1/2 -right-3 z-10 hidden size-5 -translate-y-1/2 rounded-full bg-background p-0.5 text-muted-foreground xl:block" aria-hidden />}
             </li>
